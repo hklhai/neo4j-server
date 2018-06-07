@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "87644f1882b5455422e65fcea7e6570c778c0b9e0501221aeb3431a8d7f32a03"
+            "sha256": "d5074243bb300305bdac46bb60a70ab910f8fe396860b155c2c569f82aa6559f"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -25,17 +25,17 @@
         },
         "boto3": {
             "hashes": [
-                "sha256:6dd9a6fe523c3e4d4fc28fe7030453ee5b4e75e778144cf22008c79dfc031bd3",
-                "sha256:fccad296209cfbee668292d51bd3b258eb85d4bce1bf1a5dcb2e24942a00d48a"
+                "sha256:28ea099b76d6b18210109cb8f7d5452a4ba48992e85696fa0ede33793af5ba69",
+                "sha256:d5f4a060c8b82c61f47b84afd08fb15d0d28591e4577c0f60fd5dbcc8ab4418d"
             ],
-            "version": "==1.7.26"
+            "version": "==1.7.31"
         },
         "botocore": {
             "hashes": [
-                "sha256:c63c77e41cd514d80da06eb626f5e9f50c94c44b0206957aca23a20f889abb05",
-                "sha256:ca23fb013a18584a3a7043c6cc0bf02250f2665937e73290f65f1f48ee9b4f78"
+                "sha256:43ed488d083e4f47d14a73ded5483c466e8823e27d8712d527039a6157f76672",
+                "sha256:5e35278d27c5640c0ef3aec19cc846e4580c467057997d5428a10109105b9f10"
             ],
-            "version": "==1.10.26"
+            "version": "==1.10.31"
         },
         "bz2file": {
             "hashes": [
@@ -71,6 +71,14 @@
                 "sha256:7a4bd47eaf6596e1295ecb11361139febe29b084a87bf005bf899f9a42edc3c6"
             ],
             "version": "==0.14"
+        },
+        "elasticsearch": {
+            "hashes": [
+                "sha256:503c498234dd572896e563386181d7cb966ab3db68b0b132a26c5dabfd5dde24",
+                "sha256:b106fa3e01750376a42f8a9882bd84d630fda58c7aba38b4fec797d11c0bd0a2"
+            ],
+            "index": "pypi",
+            "version": "==6.2.0"
         },
         "flask": {
             "hashes": [
@@ -184,12 +192,26 @@
             ],
             "version": "==1.14.3"
         },
-        "pyhanlp": {
+        "py2neo": {
             "hashes": [
-                "sha256:8c1cf5ee9b3f06eb19bcee1806cc2fdcff4983efc6661e040e7d292ba2645ce3"
+                "sha256:8177a9b2c4d23a3ce26f02d3d6be92ac49cb7520e88ec1b41d8c6e86774938b8"
             ],
             "index": "pypi",
-            "version": "==0.1.41"
+            "version": "==3.1.2"
+        },
+        "pyhanlp": {
+            "hashes": [
+                "sha256:a0f0feb2186680433df49e4a1b4599cf5cfa8f0a03e9a1f48d0e650fd0ad66db"
+            ],
+            "index": "pypi",
+            "version": "==0.1.42"
+        },
+        "pyltp": {
+            "hashes": [
+                "sha256:58e200cc11cb26a081a2804f3c80ef993656ed0f5585eda823db54fbd43309a6"
+            ],
+            "index": "pypi",
+            "version": "==0.2.1"
         },
         "python-dateutil": {
             "hashes": [

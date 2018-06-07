@@ -1,5 +1,5 @@
 [[source]]
-url = "https://pypi.org/simple"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 verify_ssl = true
 name = "pypi"
 
@@ -8,6 +8,10 @@ flask = "*"
 nltk = "*"
 gensim = "*"
 pyhanlp = "*"
+"py2neo" = "*"
+pyltp = "*"
+elasticsearch = "*"
+flask-httpauth = "*"
 
 [dev-packages]
 
