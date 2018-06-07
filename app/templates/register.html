@@ -1,0 +1,14 @@
+{% extends "form_base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+{% block title %}拾人文创{% endblock %}
+{% block page_content %}
+
+<div class="page-header">
+ <h1>Register</h1>
+</div>
+    <form action="/register" method="post">
+    {{ wtf.quick_form(form) }}
+
+    </form>
+
+{% endblock %}
