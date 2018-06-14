@@ -28,6 +28,8 @@ flask-babel = "*"
 guess-language = "*"
 flipflop = "*"
 coverage = "*"
+jsonplus = "*"
+flask-restful = "*"
 
 [dev-packages]
 

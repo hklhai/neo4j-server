@@ -1,11 +1,11 @@
-from flask_login import LoginManager, login_user, UserMixin, logout_user, login_required
+from flask_login import UserMixin
+
 from app.run import db
-from app.run import login_manger
 
 
 class User(UserMixin, db.Model):
     """
-    Mdoel
+    User Mdoel
     """
     __tablename__ = 'tb_user'
     uid = db.Column(db.Integer, autoincrement=True, primary_key=True)
@@ -30,3 +30,5 @@ class User(UserMixin, db.Model):
 
     def is_anonymous(self):
         return False
+
+
