@@ -129,6 +129,7 @@ def get_detail_by_eid():
     return jsonify(all_doc['hits']['hits'][0].get('_source'))
 
 
+@app.route('/api/chapter/add', methods=['POST'])
 def chapter_add():
     """
     持久化章节信息至elasticsearch
@@ -142,28 +143,81 @@ def chapter_add():
         chaptercontent = request.get_json().get('chaptercontent')
         bookid = request.get_json().get('bookid')
         chapterversion = 1
-        create_date = datetime.now()
-        edit_date = datetime.now()
-        body = {"chaptername": chaptername, "chapterabstract": chapterabstract,
-                "chaptercontent": chaptercontent, "bookid": bookid, "chapterversion": chapterversion,
-                "chapterversion": chapterversion, "create_date": create_date, "edit_date": edit_date}
+        create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        body = {"chaptername": chaptername, "chapterabstract": chapterabstract, "chaptercontent": chaptercontent,
+                "bookid": bookid, "chapterversion": chapterversion, "chapterversion": chapterversion,
+                "create_date": create_date, "edit_date": edit_date}
 
-        es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
+        es.index(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
         return jsonify({'code': 1, 'message': '新增章节成功'})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '新增章节失败'})
 
 
+@app.route('/api/chapter/edit', methods=['POST'])
 def chapter_edit():
     """
     更新ElasticSearch章节信息
     :return:
     """
-    pass
+    if not request.json or not 'bookid' in request.json or not 'eid' in request.json:
+        abort(400)
+    try:
+        chaptername = request.get_json().get('chaptername')
+        chapterabstract = request.get_json().get('chapterabstract')
+        chaptercontent = request.get_json().get('chaptercontent')
+        bookid = request.get_json().get('bookid')
+        eid = request.get_json().get('eid')
+        create_date = request.get_json().get('create_date')
+        edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        body = {"chaptername": chaptername, "chapterabstract": chapterabstract, "chaptercontent": chaptercontent,
+                "bookid": bookid, "create_date": create_date, "edit_date": edit_date}
+        es.index(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body, id=eid)
+        return jsonify({'code': 1, 'message': '修改章节成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '修改章节失败'})
 
 
-@app.route('/api/graph_demo', methods=['GET'])
+@app.route('/api/chapter/list', methods=['POST'])
+def chapter_list():
+    """
+    获取ElasticSearch章节列表信息
+    :return:
+    """
+    if not request.json or not 'bookid' in request.json:
+        abort(400)
+    try:
+        bookid = request.get_json().get('bookid')
+        query = {'query': {'term': {'bookid': bookid}}}
+        all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query)
+        return jsonify(all_doc['hits']['hits'])
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '查询失败'})
+
+
+@app.route('/api/chapter/delete', methods=['POST'])
+def chapter_delete():
+    """
+    删除ElasticSearch章节信息
+    :return:
+    """
+    if not request.json or not 'eid' in request.json:
+        abort(400)
+    try:
+        eid = request.get_json().get('eid')
+        es.delete(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, id=eid)
+        return jsonify({'code': 1, 'message': '删除章节成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '删除章节失败'})
+
+
+@app.route('/api/graph_demo', methods=['POST'])
 def graph_demo():
     cypher_query = "START   n = Node(14698)    MATCH(n) -->(x)    RETURN    x, n"
     graph = Graph(
