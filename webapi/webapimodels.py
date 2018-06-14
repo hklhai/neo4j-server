@@ -38,7 +38,7 @@ class User(UserMixin, db.Model):
         return False
 
 
-class Book(UserMixin, db.Model):
+class Book(db.Model):
     """
     Book Mdoel
     """

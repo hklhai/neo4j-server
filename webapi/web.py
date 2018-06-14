@@ -11,6 +11,7 @@ from flask_login import LoginManager
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 from py2neo import Graph
+from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from common.global_list import *
@@ -25,7 +26,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
 app.config['SQLALCHEMY_COMMIT_TEARDOWN'] = True
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = True
-db = SQLAlchemy()
+db = SQLAlchemy(app)
 db.init_app(app)
 bootstrap = Bootstrap(app)
 moment = Moment(app)
@@ -49,7 +50,7 @@ def login():
     password = request.get_json().get('password')
     user = User.query.filter_by(username=username).first()
     if user is not None and check_password_hash(user.password, password):
-        repjson = jsonify({'code': 1, 'message': '成功登录', 'username': user.username})
+        repjson = jsonify({'code': 1, 'message': '成功登录', 'username': user.username, 'userid': user.uid})
         return repjson
     else:
         flash('用户或密码错误')
@@ -118,8 +119,35 @@ def book_list():
     return jsonify(books_json)
 
 
+@app.route('/api/editBook', methods=['POST'])
+def book_edit():
+    """
+    更新图书信息
+    :return: 当前用户图书列表
+    """
+    if not request.json or not 'bookid' in request.json:
+        abort(400)
+    bookid = request.get_json().get('bookid')
+    bookname = request.get_json().get('bookname')
+    bookstatus = request.get_json().get('bookstatus')
+    book = Book.query.filter_by(bookid=bookid).first()
+    if book is not None:
+        book.bookname = bookname
+        book.bookstatus = bookstatus
+        db.session.merge(book)
+        db.session.flush()
+        db.session.commit()
+        return jsonify({'code': 1, 'message': '修改小说成功'})
+    else:
+        return jsonify({'code': 0, 'message': '修改小说失败'})
+
+
 @app.route('/api/detail', methods=['POST'])
 def get_detail_by_eid():
+    """
+    通过eid查询新闻详细信息
+    :return:
+    """
     if not request.json or not 'eid' in request.json:
         abort(400)
 
@@ -219,6 +247,10 @@ def chapter_delete():
 
 @app.route('/api/graph_demo', methods=['POST'])
 def graph_demo():
+    """
+    Neo4j图数据库 demo
+    :return:
+    """
     cypher_query = "START   n = Node(14698)    MATCH(n) -->(x)    RETURN    x, n"
     graph = Graph(
         host=NEO4J_HOST,  # neo4j 搭载服务器的ip地址，ifconfig可获取到
@@ -233,6 +265,11 @@ def graph_demo():
 
 @app.errorhandler(404)
 def not_found(error):
+    """
+    404 response
+    :param error:
+    :return:
+    """
     return make_response(jsonify({'error': 'Not found'}), 404)
 
 
