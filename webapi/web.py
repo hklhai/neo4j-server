@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import json
 from datetime import datetime
+from itertools import groupby
+from operator import itemgetter
 
 from elasticsearch import Elasticsearch
 from flask import Flask, make_response
@@ -11,11 +13,10 @@ from flask_login import LoginManager
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 from py2neo import Graph
-from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from common.global_list import *
-from webapi.webapimodels import User, Book, new_alchemy_encoder
+from webapi.webapimodels import new_alchemy_encoder
 
 app = Flask(__name__)
 
@@ -48,6 +49,7 @@ def load_user(user_id):
 def login():
     username = request.get_json().get('username')
     password = request.get_json().get('password')
+    from webapi.webapimodels import User
     user = User.query.filter_by(username=username).first()
     if user is not None and check_password_hash(user.password, password):
         repjson = jsonify({'code': 1, 'message': '成功登录', 'username': user.username, 'userid': user.uid})
@@ -64,6 +66,7 @@ def register():
         abort(400)
 
     username = request.get_json().get('username')
+    from webapi.webapimodels import User
     user = User.query.filter_by(username=username).first()
     if user is not None:
         return jsonify({'code': 0, 'message': '用户名已存在！'})
@@ -85,6 +88,7 @@ def add_book():
         abort(400)
 
     bookname = request.get_json().get('bookname')
+    from webapi.webapimodels import Book
     book = Book.query.filter_by(bookname=bookname).first()
     if book is not None:
         return jsonify({'code': 0, 'message': '本小说已存在，请确认后新建！'})
@@ -93,7 +97,8 @@ def add_book():
         bookname=request.get_json().get('bookname'),
         userid=request.get_json().get('userid'),
         createtime=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        bookstatus=0
+        bookstatus=0,
+        booklabel=0
     )
     db.session.add(book)
     db.session.commit()
@@ -110,25 +115,24 @@ def book_list():
         abort(400)
 
     userid = request.get_json().get('userid')
-    books = Book.query.filter_by(userid=userid)
+    from webapi.webapimodels import Book
+    books = Book.query.filter_by(userid=userid, booklabel=0).order_by(Book.bookstatus).all()
 
-    # msgs = []
-    # for msg in books:
-    #     msgs.append(msg)
-    # books_json = json.dumps(msgs, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False)
-    # return jsonify({"books":  json.loads(books_json)})
+    # dic = {
+    #     'doneBook': [],
+    #     'doingBook': []
+    # }
+    # for item in books:
+    #     if item.bookstatus == '0':
+    #         dic['doingBook'].append(item)
+    #     else:
+    #         dic['doneBook'].append(item)
 
-    dic = {
-        'doneBook': [],
-        'doingBook': []
-    }
-    for item in books:
-        if item.bookstatus == '0':
-            dic['doingBook'].append(item)
-        else:
-            dic['doneBook'].append(item)
-    books_json = json.dumps(dic, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False)
-    return jsonify({"books": json.loads(books_json)})
+    lists = json.loads(json.dumps(books, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
+    lists.sort(key=itemgetter('bookstatus'))
+    group_by_books = groupby(lists, itemgetter('bookstatus'))
+    dic = dict([(key, list(group)) for key, group in group_by_books])
+    return jsonify({"books": dic})
 
 
 @app.route('/api/editBook', methods=['POST'])
@@ -142,6 +146,7 @@ def book_edit():
     bookid = request.get_json().get('bookid')
     bookname = request.get_json().get('bookname')
     bookstatus = request.get_json().get('bookstatus')
+    from webapi.webapimodels import Book
     book = Book.query.filter_by(bookid=bookid).first()
     if book is not None:
         book.bookname = bookname
@@ -152,6 +157,27 @@ def book_edit():
         return jsonify({'code': 1, 'message': '修改小说成功'})
     else:
         return jsonify({'code': 0, 'message': '修改小说失败'})
+
+
+@app.route('/api/deleteBook', methods=['POST'])
+def book_delete():
+    """
+    删除图书信息
+    :return:
+    """
+    if not request.json or not 'bookid' in request.json:
+        abort(400)
+    bookid = request.get_json().get('bookid')
+    from webapi.webapimodels import Book
+    book = Book.query.filter_by(bookid=bookid).first()
+    if book is not None:
+        book.booklabel = 1
+        db.session.merge(book)
+        db.session.flush()
+        db.session.commit()
+        return jsonify({'code': 1, 'message': '删除小说成功'})
+    else:
+        return jsonify({'code': 0, 'message': '删除小说失败'})
 
 
 @app.route('/api/detail', methods=['POST'])
@@ -182,11 +208,11 @@ def chapter_add():
         chapterabstract = request.get_json().get('chapterabstract')
         chaptercontent = request.get_json().get('chaptercontent')
         bookid = request.get_json().get('bookid')
-        chapterversion = 1
+        chapterversion = request.get_json().get('chapterversion')
         create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         body = {"chaptername": chaptername, "chapterabstract": chapterabstract, "chaptercontent": chaptercontent,
-                "bookid": bookid, "chapterversion": chapterversion, "chapterversion": chapterversion,
+                "bookid": bookid, "chapterversion": str(chapterversion),
                 "create_date": create_date, "edit_date": edit_date}
 
         es.index(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
@@ -263,6 +289,7 @@ def graph_demo():
     Neo4j图数据库 demo
     :return:
     """
+    # todo 待修改
     cypher_query = "START   n = Node(14698)    MATCH(n) -->(x)    RETURN    x, n"
     graph = Graph(
         host=NEO4J_HOST,  # neo4j 搭载服务器的ip地址，ifconfig可获取到
@@ -272,7 +299,7 @@ def graph_demo():
     )
 
     x = graph.run(cypher_query)
-    return jsonify(str(list(x._source.buffer)))
+    return jsonify({"graph": list(x._source.buffer)})
 
 
 @app.errorhandler(404)
