@@ -112,11 +112,23 @@ def book_list():
     userid = request.get_json().get('userid')
     books = Book.query.filter_by(userid=userid)
 
-    msgs = []
-    for msg in books:
-        msgs.append(msg)
-    books_json = json.dumps(msgs, cls=new_alchemy_encoder(), check_circular=False)
-    return jsonify(books_json)
+    # msgs = []
+    # for msg in books:
+    #     msgs.append(msg)
+    # books_json = json.dumps(msgs, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False)
+    # return jsonify({"books":  json.loads(books_json)})
+
+    dic = {
+        'doneBook': [],
+        'doingBook': []
+    }
+    for item in books:
+        if item.bookstatus == '0':
+            dic['doingBook'].append(item)
+        else:
+            dic['doneBook'].append(item)
+    books_json = json.dumps(dic, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False)
+    return jsonify({"books": json.loads(books_json)})
 
 
 @app.route('/api/editBook', methods=['POST'])

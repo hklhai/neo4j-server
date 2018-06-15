@@ -48,6 +48,7 @@ class Book(db.Model):
     userid = db.Column(db.Integer)
     bookstatus = db.Column(db.Integer)
     createtime = db.Column(db.DateTime)
+    imgurl = db.Column(db.String(60))
 
     def get_id(self):
         return self.bookid
