@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import sys
 from datetime import datetime
 from itertools import groupby
 from operator import itemgetter
@@ -18,31 +19,56 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from common.global_list import *
 from webapi.webapimodels import new_alchemy_encoder
 
+sys.path.append(r'/home/hadoop/PycharmProjects/srwc')
 app = Flask(__name__)
 
 # 配置flask配置对象中键：SQLALCHEMY_DATABASE_URI
 app.config.from_object('config')
 app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
 # 配置flask配置对象中键：SQLALCHEMY_COMMIT_TEARDOWN,设置为True,应用会自动在每次请求结束后提交数据库中变动
-app.config['SQLALCHEMY_COMMIT_TEARDOWN'] = True
+# app.config['SQLALCHEMY_COMMIT_TEARDOWN'] = True
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
-app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = True
+
 db = SQLAlchemy(app)
 db.init_app(app)
 bootstrap = Bootstrap(app)
 moment = Moment(app)
 login_manger = LoginManager()
 login_manger.session_protection = 'strong'
-login_manger.login_view = 'blog.login'
 login_manger.init_app(app)
 
+# ElasticSearch Setting
 es = Elasticsearch([HOST_PORT])
+
+# Neo4j knowledge graph
+graph = Graph(
+    host=NEO4J_HOST,  # neo4j 搭载服务器的ip地址，ifconfig可获取到
+    http_port=NEO4J_HTTP_PORT,  # neo4j 服务器监听的端口号
+    user=NEO4J_USER,  # 数据库user name，如果没有更改过，应该是neo4j
+    password=NEO4J_PASSWORD  # 自己设定的密码
+)
+
+# Neo4j Character Setting
+graph = Graph(
+    host=CHARACTER_NEO4J_HOST,
+    http_port=CHARACTER_NEO4J_HTTP_PORT,
+    user=CHARACTER_NEO4J_USER,
+    password=CHARACTER_NEO4J_PASSWORD
+)
 
 
 @login_manger.user_loader
 def load_user(user_id):
     from app.model import User
     return User.query.get(int(user_id))
+
+
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({'code': 1, 'message': 'SRWC-Server Started'})
+
+
+"""  ========================================登录注册管理 结束================================================== """
 
 
 @app.route('/api/login', methods=['POST'])
@@ -61,7 +87,9 @@ def login():
 
 @app.route('/api/register', methods=['POST'])
 def register():
-    ""
+    """
+    注册
+    """
     if not request.json or not 'username' in request.json:
         abort(400)
 
@@ -76,6 +104,11 @@ def register():
     db.session.add(user)
     db.session.commit()
     return jsonify({'code': 1, 'message': '注册成功'})
+
+
+"""  ========================================登录注册管理 结束================================================== """
+
+"""  ========================================小说信息管理 开始================================================== """
 
 
 @app.route('/api/addBook', methods=['POST'])
@@ -102,6 +135,8 @@ def add_book():
     )
     db.session.add(book)
     db.session.commit()
+    db.session.flush()
+    db.session.close()
     return jsonify({'code': 1, 'message': '新增小说成功'})
 
 
@@ -116,18 +151,7 @@ def book_list():
 
     userid = request.get_json().get('userid')
     from webapi.webapimodels import Book
-    books = Book.query.filter_by(userid=userid, booklabel=0).order_by(Book.bookstatus).all()
-
-    # dic = {
-    #     'doneBook': [],
-    #     'doingBook': []
-    # }
-    # for item in books:
-    #     if item.bookstatus == '0':
-    #         dic['doingBook'].append(item)
-    #     else:
-    #         dic['doneBook'].append(item)
-
+    books = db.session.query(Book).filter_by(userid=userid, booklabel=0).order_by(Book.bookstatus).all()
     lists = json.loads(json.dumps(books, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
     lists.sort(key=itemgetter('bookstatus'))
     group_by_books = groupby(lists, itemgetter('bookstatus'))
@@ -181,6 +205,24 @@ def book_delete():
 
 
 @app.route('/api/detail', methods=['POST'])
+def book_detail():
+    """
+    获取图书信息
+    :return: 图书详细信息
+    """
+    if not request.json or not 'bookid' in request.json:
+        abort(400)
+    bookid = request.get_json().get('bookid')
+    from webapi.webapimodels import Book
+    book = Book.query.filter_by(bookid=bookid, booklabel=0).first()
+    b = json.loads(json.dumps(book, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
+    return jsonify({"books": b})
+
+
+"""  ========================================小说信息管理 结束================================================== """
+
+
+@app.route('/api/detail', methods=['POST'])
 def get_detail_by_eid():
     """
     通过eid查询新闻详细信息
@@ -193,6 +235,9 @@ def get_detail_by_eid():
     body = {"query": {"term": {"_id": eid}}}
     all_doc = es.search(index=NEWS_INDEX, doc_type=NEWS_TYPE, body=body)
     return jsonify(all_doc['hits']['hits'][0].get('_source'))
+
+
+"""  ========================================章节信息管理 开始================================================== """
 
 
 @app.route('/api/chapter/add', methods=['POST'])
@@ -209,10 +254,13 @@ def chapter_add():
         chaptercontent = request.get_json().get('chaptercontent')
         bookid = request.get_json().get('bookid')
         chapterversion = request.get_json().get('chapterversion')
+        charactersetting = request.get_json().get('charactersetting')
+
         create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
         body = {"chaptername": chaptername, "chapterabstract": chapterabstract, "chaptercontent": chaptercontent,
-                "bookid": bookid, "chapterversion": str(chapterversion),
+                "bookid": bookid, "chapterversion": str(chapterversion), "charactersetting": str(charactersetting),
                 "create_date": create_date, "edit_date": edit_date}
 
         es.index(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
@@ -237,10 +285,13 @@ def chapter_edit():
         bookid = request.get_json().get('bookid')
         eid = request.get_json().get('eid')
         create_date = request.get_json().get('create_date')
+        charactersetting = request.get_json().get('charactersetting')
+
         edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         body = {"chaptername": chaptername, "chapterabstract": chapterabstract, "chaptercontent": chaptercontent,
-                "bookid": bookid, "create_date": create_date, "edit_date": edit_date}
+                "bookid": bookid, "create_date": create_date, "edit_date": edit_date,
+                "charactersetting": str(charactersetting)}
         es.index(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body, id=eid)
         return jsonify({'code': 1, 'message': '修改章节成功'})
     except Exception as err:
@@ -283,6 +334,138 @@ def chapter_delete():
         return jsonify({'code': 0, 'message': '删除章节失败'})
 
 
+@app.route('/api/chapter/detail', methods=['POST'])
+def get_chapter_detail_by_eid():
+    """
+    通过eid查询章节详细信息
+    """
+    if not request.json or not 'eid' in request.json:
+        abort(400)
+
+    eid = request.get_json().get('eid')
+    body = {"query": {"term": {"_id": eid}}}
+    all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
+    return jsonify(all_doc['hits']['hits'][0].get('_source'))
+
+
+@app.route('/api/chapter/count', methods=['POST'])
+def chapter_count():
+    """
+    ElasticSearch章节数量
+    :return: ElasticSearch章节数量+1
+    """
+    if not request.json or not 'bookid' in request.json:
+        abort(400)
+    try:
+        bookid = request.get_json().get('bookid')
+        query = {'query': {'term': {'bookid': bookid}}}
+        all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query)
+        return jsonify({'code': 1, 'next_chapter': len(all_doc['hits']['hits']) + 1})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '获取失败'})
+
+
+"""  ========================================章节信息管理 结束================================================== """
+
+"""  ========================================总体信息管理 开始================================================== """
+
+
+@app.route('/api/info/add', methods=['POST'])
+def info_add():
+    """
+    持久化总体信息至elasticsearch
+    :return:
+    """
+    if not request.json or not 'bookid' in request.json:
+        abort(400)
+    try:
+        chapterabstract = request.get_json().get('chapterabstract')
+        charactersetting = request.get_json().get('charactersetting')
+        bookid = request.get_json().get('bookid')
+        body = {"chapterabstract": chapterabstract, "bookid": bookid, "charactersetting": str(charactersetting)}
+
+        es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body)
+        return jsonify({'code': 1, 'message': '新增成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '新增失败'})
+
+
+@app.route('/api/info/edit', methods=['POST'])
+def info_edit():
+    """
+    更新ElasticSearch总体信息
+    :return:
+    """
+    if not request.json or not 'bookid' in request.json or not 'eid' in request.json:
+        abort(400)
+    try:
+        chapterabstract = request.get_json().get('chapterabstract')
+        charactersetting = request.get_json().get('charactersetting')
+        bookid = request.get_json().get('bookid')
+        eid = request.get_json().get('eid')
+
+        body = {"chapterabstract": chapterabstract, "bookid": bookid, "charactersetting": str(charactersetting)}
+        es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body, id=eid)
+        return jsonify({'code': 1, 'message': '修改成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '修改失败'})
+
+
+@app.route('/api/info/list', methods=['POST'])
+def info_list():
+    """
+    获取ElasticSearch章节列表信息
+    :return:
+    """
+    if not request.json or not 'bookid' in request.json:
+        abort(400)
+    try:
+        bookid = request.get_json().get('bookid')
+        query = {'query': {'term': {'bookid': bookid}}}
+        all_doc = es.search(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=query)
+        return jsonify(all_doc['hits']['hits'])
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '查询失败'})
+
+
+@app.route('/api/info/delete', methods=['POST'])
+def info_delete():
+    """
+    删除ElasticSearch章节信息
+    :return:
+    """
+    if not request.json or not 'eid' in request.json:
+        abort(400)
+    try:
+        eid = request.get_json().get('eid')
+        es.delete(index=BOOK_INDEX, doc_type=BOOK_TYPE, id=eid)
+        return jsonify({'code': 1, 'message': '删除成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '删除失败'})
+
+
+@app.route('/api/info/detail', methods=['POST'])
+def get_info_detail_by_eid():
+    """
+    通过eid查询章节信息
+    """
+    if not request.json or not 'eid' in request.json:
+        abort(400)
+
+    eid = request.get_json().get('eid')
+    body = {"query": {"term": {"_id": eid}}}
+    all_doc = es.search(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body)
+    return jsonify(all_doc['hits']['hits'][0].get('_source'))
+
+
+"""  ========================================总体信息管理 结束================================================== """
+
+
 @app.route('/api/graph_demo', methods=['POST'])
 def graph_demo():
     """
@@ -291,12 +474,6 @@ def graph_demo():
     """
     # todo 待修改
     cypher_query = "START   n = Node(14698)    MATCH(n) -->(x)    RETURN    x, n"
-    graph = Graph(
-        host=NEO4J_HOST,  # neo4j 搭载服务器的ip地址，ifconfig可获取到
-        http_port=NEO4J_HTTP_PORT,  # neo4j 服务器监听的端口号
-        user=NEO4J_USER,  # 数据库user name，如果没有更改过，应该是neo4j
-        password=NEO4J_PASSWORD  # 自己设定的密码
-    )
 
     x = graph.run(cypher_query)
     return jsonify({"graph": list(x._source.buffer)})
