@@ -11,7 +11,7 @@ from app.run import db
 
 class User(UserMixin, db.Model):
     """
-    Mdoel
+    Mdoel  用户信息
     """
     __tablename__ = 'tb_user'
     uid = db.Column(db.Integer, autoincrement=True, primary_key=True)
@@ -40,7 +40,7 @@ class User(UserMixin, db.Model):
 
 class Book(db.Model):
     """
-    Book Mdoel
+    Book Mdoel  小说信息
     """
     __tablename__ = 'tb_book'
     bookid = db.Column(db.Integer, autoincrement=True, primary_key=True)
@@ -53,6 +53,21 @@ class Book(db.Model):
 
     def get_id(self):
         return self.bookid
+
+
+class Work(db.Model):
+    """
+    Work Mdoel 保存工作台信息
+    """
+    __tablename__ = 'tb_work'
+    wid = db.Column(db.Integer, autoincrement=True, primary_key=True)
+    workmodule = db.Column(db.String(255), unique=True)
+    userid = db.Column(db.Integer)
+    eid = db.Column(db.String(120))
+    dellabel = db.Column(db.Integer)
+
+    def get_id(self):
+        return self.wid
 
 
 def new_alchemy_encoder():

@@ -20,7 +20,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 sys.path.append(os.path.dirname(os.getcwd()))
 
 from common.global_list import *
-from webapi.webapimodels import new_alchemy_encoder
+from webapi.webapimodels import new_alchemy_encoder, Work
 
 app = Flask(__name__)
 
@@ -73,6 +73,32 @@ def index():
 """  ========================================登录注册管理 结束================================================== """
 
 
+@app.route('/api/work/save', methods=['POST'])
+def work_save():
+    """
+    保存工作区信息，存在userid更新保存，不存爱userid新增保存
+    """""
+    if not request.json or not 'userid' in request.json or not "eid" in request.json:
+        abort(400)
+    eid = request.get_json().get('eid')
+    userid = request.get_json().get('userid')
+    dellabel = 0
+    workmodule = "editer"
+    work = db.session.query(Work).filter_by(userid=userid, dellabel=0).all()
+    if work is not None:
+        work.userid = userid
+        work.eid = eid
+        db.session.merge(work)
+        db.session.flush()
+        db.session.commit()
+        return jsonify({'code': 1, 'message': '保存成功'})
+    else:
+        work = Work(userid=userid, eid=eid, dellabel=dellabel, workmodule=workmodule)
+        db.session.add(work)
+        db.session.commit()
+        return jsonify({'code': 1, 'message': '新增成功'})
+
+
 @app.route('/api/login', methods=['POST'])
 def login():
     username = request.get_json().get('username')
@@ -80,8 +106,14 @@ def login():
     from webapi.webapimodels import User
     user = User.query.filter_by(username=username).first()
     if user is not None and check_password_hash(user.password, password):
-        repjson = jsonify({'code': 1, 'message': '成功登录', 'username': user.username, 'userid': user.uid})
-        return repjson
+        work = db.session.query(Work).filter_by(userid=user.uid, dellabel=0).all()
+        if len(work) > 0:
+            body = {"query": {"term": {"_id": work.eid}}}
+            all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
+            return jsonify({'code': 1, 'message': '成功登录', 'username': user.username, 'userid': user.uid,
+                            "chapter": all_doc['hits']['hits'][0].get('_source')})
+        else:
+            return jsonify({'code': 1, 'message': '成功登录', 'username': user.username, 'userid': user.uid})
     else:
         flash('用户或密码错误')
         return jsonify({'code': 0, 'message': '用户名或密码错误'})
@@ -101,8 +133,7 @@ def register():
     if user is not None:
         return jsonify({'code': 0, 'message': '用户名已存在！'})
 
-    user = User(username=username,
-                password=generate_password_hash(request.get_json().get('password')))
+    user = User(username=username, password=generate_password_hash(request.get_json().get('password')))
     db.session.add(user)
     db.session.commit()
     return jsonify({'code': 1, 'message': '注册成功'})
@@ -288,12 +319,21 @@ def chapter_edit():
         eid = request.get_json().get('eid')
         create_date = request.get_json().get('create_date')
         charactersetting = request.get_json().get('charactersetting')
+        chapterversion = request.get_json().get('chapterversion')
+        chapterfinish = request.get_json().get('chapterfinish')
+
+        if chapterfinish == 1:
+            work = db.session.query(Work).filter_by(eid=eid, dellabel=0).all()
+            if work is not None:
+                work.dellabel = 1
+                db.session.merge(work)
+                db.session.flush()
+                db.session.commit()
 
         edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
         body = {"chaptername": chaptername, "chapterabstract": chapterabstract, "chaptercontent": chaptercontent,
                 "bookid": bookid, "create_date": create_date, "edit_date": edit_date,
-                "charactersetting": str(charactersetting)}
+                "charactersetting": str(charactersetting), "chapterversion": str(chapterversion)}
         es.index(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body, id=eid)
         return jsonify({'code': 1, 'message': '修改章节成功'})
     except Exception as err:
@@ -348,6 +388,10 @@ def get_chapter_detail_by_eid():
     body = {"query": {"term": {"_id": eid}}}
     all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
     return jsonify(all_doc['hits']['hits'][0].get('_source'))
+    eid = request.get_json().get('eid')
+    body = {"query": {"term": {"_id": eid}}}
+    all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
+    return jsonify(all_doc['hits']['hits'][0].get('_source'))
 
 
 @app.route('/api/chapter/count', methods=['POST'])
@@ -382,13 +426,19 @@ def info_add():
     if not request.json or not 'bookid' in request.json:
         abort(400)
     try:
-        chapterabstract = request.get_json().get('chapterabstract')
-        charactersetting = request.get_json().get('charactersetting')
         bookid = request.get_json().get('bookid')
-        body = {"chapterabstract": chapterabstract, "bookid": bookid, "charactersetting": str(charactersetting)}
+        query = {'query': {'term': {'bookid': bookid}}}
+        all_doc = es.search(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=query)
+        if len(all_doc['hits']['hits']) == 0:
+            chapterabstract = request.get_json().get('chapterabstract')
+            charactersetting = request.get_json().get('charactersetting')
+            bookid = request.get_json().get('bookid')
+            body = {"chapterabstract": chapterabstract, "bookid": bookid, "charactersetting": str(charactersetting)}
 
-        es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body)
-        return jsonify({'code': 1, 'message': '新增成功'})
+            es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body)
+            return jsonify({'code': 1, 'message': '新增成功'})
+        else:
+            return jsonify({'code': 0, 'message': '大纲已存在'})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '新增失败'})
@@ -416,8 +466,8 @@ def info_edit():
         return jsonify({'code': 0, 'message': '修改失败'})
 
 
-@app.route('/api/info/list', methods=['POST'])
-def info_list():
+@app.route('/api/info/query', methods=['POST'])
+def info_query():
     """
     获取ElasticSearch章节列表信息
     :return:
@@ -467,6 +517,8 @@ def get_info_detail_by_eid():
 
 """  ========================================总体信息管理 结束================================================== """
 
+"""  ========================================知识图谱管理 开始================================================== """
+
 
 @app.route('/api/graph_demo', methods=['POST'])
 def graph_demo():
@@ -479,6 +531,13 @@ def graph_demo():
 
     x = graph.run(cypher_query)
     return jsonify({"graph": list(x._source.buffer)})
+
+
+"""  ========================================知识图谱管理 结束================================================== """
+
+"""  ========================================人物设定管理 开始================================================== """
+
+"""  ========================================人物设定管理 结束================================================== """
 
 
 @app.errorhandler(404)
