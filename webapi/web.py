@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import os
 import sys
 from datetime import datetime
 from itertools import groupby
@@ -16,10 +17,11 @@ from flask_sqlalchemy import SQLAlchemy
 from py2neo import Graph
 from werkzeug.security import check_password_hash, generate_password_hash
 
+sys.path.append(os.path.dirname(os.getcwd()))
+
 from common.global_list import *
 from webapi.webapimodels import new_alchemy_encoder
 
-sys.path.append(r'/home/hadoop/PycharmProjects/srwc')
 app = Flask(__name__)
 
 # 配置flask配置对象中键：SQLALCHEMY_DATABASE_URI
