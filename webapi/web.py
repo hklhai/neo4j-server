@@ -84,39 +84,60 @@ def work_save():
     userid = request.get_json().get('userid')
     dellabel = 0
     workmodule = "editer"
-    work = db.session.query(Work).filter_by(userid=userid, dellabel=0).all()
+    work = db.session.query(Work).filter_by(userid=userid, dellabel=0).first()
     if work is not None:
         work.userid = userid
         work.eid = eid
         db.session.merge(work)
         db.session.flush()
         db.session.commit()
+        db.session.close()
         return jsonify({'code': 1, 'message': '保存成功'})
     else:
         work = Work(userid=userid, eid=eid, dellabel=dellabel, workmodule=workmodule)
         db.session.add(work)
         db.session.commit()
+        db.session.close()
         return jsonify({'code': 1, 'message': '新增成功'})
 
 
 @app.route('/api/login', methods=['POST'])
 def login():
+    """
+    登录
+    """
+    if not request.json or not 'username' in request.json or not "password" in request.json:
+        abort(400)
     username = request.get_json().get('username')
     password = request.get_json().get('password')
     from webapi.webapimodels import User
     user = User.query.filter_by(username=username).first()
+    db.session.close()
     if user is not None and check_password_hash(user.password, password):
-        work = db.session.query(Work).filter_by(userid=user.uid, dellabel=0).all()
-        if len(work) > 0:
-            body = {"query": {"term": {"_id": work.eid}}}
-            all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
-            return jsonify({'code': 1, 'message': '成功登录', 'username': user.username, 'userid': user.uid,
-                            "chapter": all_doc['hits']['hits'][0].get('_source')})
-        else:
-            return jsonify({'code': 1, 'message': '成功登录', 'username': user.username, 'userid': user.uid})
+        return jsonify({'code': 1, 'message': '成功登录', 'username': user.username, 'userid': user.uid})
     else:
         flash('用户或密码错误')
         return jsonify({'code': 0, 'message': '用户名或密码错误'})
+
+
+@app.route('/api/work/detail', methods=['POST'])
+def work_detail():
+    """
+    查询工作信息
+    :return:
+    """
+    if not request.json or not 'userid' in request.json:
+        abort(400)
+    userid = request.get_json().get('userid')
+    work = db.session.query(Work).filter_by(userid=userid, dellabel=0).first()
+    db.session.close()
+    if work is not None:
+        body = {"query": {"term": {"_id": work.eid}}}
+        all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
+        return jsonify({'code': 1, "chapter": all_doc['hits']['hits'][0].get('_source'),
+                        "eid": all_doc['hits']['hits'][0]['_id']})
+    else:
+        return jsonify({'code': 0, 'message': '无信息！'})
 
 
 @app.route('/api/register', methods=['POST'])
@@ -136,6 +157,7 @@ def register():
     user = User(username=username, password=generate_password_hash(request.get_json().get('password')))
     db.session.add(user)
     db.session.commit()
+    db.session.close()
     return jsonify({'code': 1, 'message': '注册成功'})
 
 
@@ -189,6 +211,7 @@ def book_list():
     lists.sort(key=itemgetter('bookstatus'))
     group_by_books = groupby(lists, itemgetter('bookstatus'))
     dic = dict([(key, list(group)) for key, group in group_by_books])
+    db.session.close()
     return jsonify({"books": dic})
 
 
@@ -211,8 +234,10 @@ def book_edit():
         db.session.merge(book)
         db.session.flush()
         db.session.commit()
+        db.session.close()
         return jsonify({'code': 1, 'message': '修改小说成功'})
     else:
+        db.session.close()
         return jsonify({'code': 0, 'message': '修改小说失败'})
 
 
@@ -232,8 +257,10 @@ def book_delete():
         db.session.merge(book)
         db.session.flush()
         db.session.commit()
+        db.session.close()
         return jsonify({'code': 1, 'message': '删除小说成功'})
     else:
+        db.session.close()
         return jsonify({'code': 0, 'message': '删除小说失败'})
 
 
@@ -249,6 +276,7 @@ def book_detail():
     from webapi.webapimodels import Book
     book = Book.query.filter_by(bookid=bookid, booklabel=0).first()
     b = json.loads(json.dumps(book, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
+    db.session.close()
     return jsonify({"books": b})
 
 
@@ -296,8 +324,8 @@ def chapter_add():
                 "bookid": bookid, "chapterversion": str(chapterversion), "charactersetting": str(charactersetting),
                 "create_date": create_date, "edit_date": edit_date}
 
-        es.index(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
-        return jsonify({'code': 1, 'message': '新增章节成功'})
+        result = es.index(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
+        return jsonify({'code': 1, 'message': '新增章节成功', "eid": result['_id']})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '新增章节失败'})
@@ -323,12 +351,13 @@ def chapter_edit():
         chapterfinish = request.get_json().get('chapterfinish')
 
         if chapterfinish == 1:
-            work = db.session.query(Work).filter_by(eid=eid, dellabel=0).all()
+            work = db.session.query(Work).filter_by(eid=eid, dellabel=0).first()
             if work is not None:
                 work.dellabel = 1
                 db.session.merge(work)
                 db.session.flush()
                 db.session.commit()
+                db.session.close()
 
         edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         body = {"chaptername": chaptername, "chapterabstract": chapterabstract, "chaptercontent": chaptercontent,
@@ -384,10 +413,6 @@ def get_chapter_detail_by_eid():
     if not request.json or not 'eid' in request.json:
         abort(400)
 
-    eid = request.get_json().get('eid')
-    body = {"query": {"term": {"_id": eid}}}
-    all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
-    return jsonify(all_doc['hits']['hits'][0].get('_source'))
     eid = request.get_json().get('eid')
     body = {"query": {"term": {"_id": eid}}}
     all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
