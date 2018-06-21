@@ -7,7 +7,7 @@ from itertools import groupby
 from operator import itemgetter
 
 from elasticsearch import Elasticsearch
-from flask import Flask, make_response
+from flask import Flask, make_response, Response
 from flask import abort
 from flask import request, jsonify, flash
 from flask_bootstrap import Bootstrap
@@ -16,6 +16,8 @@ from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 from py2neo import Graph
 from werkzeug.security import check_password_hash, generate_password_hash
+from flask_cors import CORS, cross_origin
+from functools import wraps
 
 sys.path.append(os.path.dirname(os.getcwd()))
 
@@ -30,6 +32,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
 # 配置flask配置对象中键：SQLALCHEMY_COMMIT_TEARDOWN,设置为True,应用会自动在每次请求结束后提交数据库中变动
 # app.config['SQLALCHEMY_COMMIT_TEARDOWN'] = True
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
+
+CORS(app, supports_credentials=True)
 
 db = SQLAlchemy(app)
 db.init_app(app)
@@ -59,13 +63,28 @@ graph = Graph(
 )
 
 
+def allow_cross_domain(fun):
+    @wraps(fun)
+    def wrapper_fun(*args, **kwargs):
+        rst = make_response(fun(*args, **kwargs))
+        rst.headers['Access-Control-Allow-Origin'] = '*'
+        # rst.headers['Access-Control-Allow-Methods'] = 'PUT,GET,POST,DELETE'
+        # allow_headers = "Referer,Accept,Origin,User-Agent"
+        # rst.headers['Access-Control-Allow-Headers'] = allow_headers
+        return rst
+
+    return wrapper_fun
+
+
 @login_manger.user_loader
+@allow_cross_domain
 def load_user(user_id):
     from app.model import User
     return User.query.get(int(user_id))
 
 
 @app.route('/', methods=['GET'])
+@allow_cross_domain
 def index():
     return jsonify({'code': 1, 'message': 'SRWC-Server Started'})
 
@@ -74,6 +93,7 @@ def index():
 
 
 @app.route('/api/work/save', methods=['POST'])
+@allow_cross_domain
 def work_save():
     """
     保存工作区信息，存在userid更新保存，不存爱userid新增保存
@@ -82,6 +102,8 @@ def work_save():
         abort(400)
     eid = request.get_json().get('eid')
     userid = request.get_json().get('userid')
+    # bookname = request.get_json().get('bookname')
+    # todo
     dellabel = 0
     workmodule = "editer"
     work = db.session.query(Work).filter_by(userid=userid, dellabel=0).first()
@@ -102,6 +124,7 @@ def work_save():
 
 
 @app.route('/api/login', methods=['POST'])
+@allow_cross_domain
 def login():
     """
     登录
@@ -121,6 +144,7 @@ def login():
 
 
 @app.route('/api/work/detail', methods=['POST'])
+@allow_cross_domain
 def work_detail():
     """
     查询工作信息
@@ -141,6 +165,7 @@ def work_detail():
 
 
 @app.route('/api/register', methods=['POST'])
+@allow_cross_domain
 def register():
     """
     注册
@@ -167,6 +192,7 @@ def register():
 
 
 @app.route('/api/addBook', methods=['POST'])
+@allow_cross_domain
 def add_book():
     """
     新建小说
@@ -196,6 +222,7 @@ def add_book():
 
 
 @app.route('/api/bookList', methods=['POST'])
+@allow_cross_domain
 def book_list():
     """
     获取当前用户图书列表
@@ -216,6 +243,7 @@ def book_list():
 
 
 @app.route('/api/editBook', methods=['POST'])
+@allow_cross_domain
 def book_edit():
     """
     更新图书信息
@@ -227,6 +255,7 @@ def book_edit():
     bookname = request.get_json().get('bookname')
     bookstatus = request.get_json().get('bookstatus')
     from webapi.webapimodels import Book
+    # todo
     book = Book.query.filter_by(bookid=bookid).first()
     if book is not None:
         book.bookname = bookname
@@ -242,6 +271,7 @@ def book_edit():
 
 
 @app.route('/api/deleteBook', methods=['POST'])
+@allow_cross_domain
 def book_delete():
     """
     删除图书信息
@@ -265,6 +295,7 @@ def book_delete():
 
 
 @app.route('/api/detail', methods=['POST'])
+@allow_cross_domain
 def book_detail():
     """
     获取图书信息
@@ -284,6 +315,7 @@ def book_detail():
 
 
 @app.route('/api/detail', methods=['POST'])
+@allow_cross_domain
 def get_detail_by_eid():
     """
     通过eid查询新闻详细信息
@@ -302,6 +334,7 @@ def get_detail_by_eid():
 
 
 @app.route('/api/chapter/add', methods=['POST'])
+@allow_cross_domain
 def chapter_add():
     """
     持久化章节信息至elasticsearch
@@ -332,6 +365,7 @@ def chapter_add():
 
 
 @app.route('/api/chapter/edit', methods=['POST'])
+@allow_cross_domain
 def chapter_edit():
     """
     更新ElasticSearch章节信息
@@ -371,6 +405,7 @@ def chapter_edit():
 
 
 @app.route('/api/chapter/list', methods=['POST'])
+@allow_cross_domain
 def chapter_list():
     """
     获取ElasticSearch章节列表信息
@@ -389,6 +424,7 @@ def chapter_list():
 
 
 @app.route('/api/chapter/delete', methods=['POST'])
+@allow_cross_domain
 def chapter_delete():
     """
     删除ElasticSearch章节信息
@@ -406,6 +442,7 @@ def chapter_delete():
 
 
 @app.route('/api/chapter/detail', methods=['POST'])
+@allow_cross_domain
 def get_chapter_detail_by_eid():
     """
     通过eid查询章节详细信息
@@ -420,6 +457,7 @@ def get_chapter_detail_by_eid():
 
 
 @app.route('/api/chapter/count', methods=['POST'])
+@allow_cross_domain
 def chapter_count():
     """
     ElasticSearch章节数量
@@ -443,6 +481,7 @@ def chapter_count():
 
 
 @app.route('/api/info/add', methods=['POST'])
+@allow_cross_domain
 def info_add():
     """
     持久化总体信息至elasticsearch
@@ -470,6 +509,7 @@ def info_add():
 
 
 @app.route('/api/info/edit', methods=['POST'])
+@allow_cross_domain
 def info_edit():
     """
     更新ElasticSearch总体信息
@@ -492,6 +532,7 @@ def info_edit():
 
 
 @app.route('/api/info/query', methods=['POST'])
+@allow_cross_domain
 def info_query():
     """
     获取ElasticSearch章节列表信息
@@ -510,6 +551,7 @@ def info_query():
 
 
 @app.route('/api/info/delete', methods=['POST'])
+@allow_cross_domain
 def info_delete():
     """
     删除ElasticSearch章节信息
@@ -527,6 +569,7 @@ def info_delete():
 
 
 @app.route('/api/info/detail', methods=['POST'])
+@allow_cross_domain
 def get_info_detail_by_eid():
     """
     通过eid查询章节信息
@@ -546,6 +589,7 @@ def get_info_detail_by_eid():
 
 
 @app.route('/api/graph_demo', methods=['POST'])
+@allow_cross_domain
 def graph_demo():
     """
     Neo4j图数据库 demo
@@ -566,6 +610,7 @@ def graph_demo():
 
 
 @app.errorhandler(404)
+@allow_cross_domain
 def not_found(error):
     """
     404 response

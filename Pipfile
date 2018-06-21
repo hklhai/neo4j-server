@@ -30,6 +30,7 @@ flipflop = "*"
 coverage = "*"
 jsonplus = "*"
 flask-restful = "*"
+flask-cors = "*"
 
 [dev-packages]
 

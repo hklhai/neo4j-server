@@ -65,6 +65,7 @@ class Work(db.Model):
     userid = db.Column(db.Integer)
     eid = db.Column(db.String(120))
     dellabel = db.Column(db.Integer)
+    bookname = db.Column(db.String(100))
 
     def get_id(self):
         return self.wid
