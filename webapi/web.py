@@ -3,21 +3,21 @@ import json
 import os
 import sys
 from datetime import datetime
+from functools import wraps
 from itertools import groupby
 from operator import itemgetter
 
 from elasticsearch import Elasticsearch
-from flask import Flask, make_response, Response
+from flask import Flask, make_response
 from flask import abort
 from flask import request, jsonify, flash
 from flask_bootstrap import Bootstrap
+from flask_cors import CORS
 from flask_login import LoginManager
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 from py2neo import Graph
 from werkzeug.security import check_password_hash, generate_password_hash
-from flask_cors import CORS, cross_origin
-from functools import wraps
 
 sys.path.append(os.path.dirname(os.getcwd()))
 
@@ -55,7 +55,7 @@ graph = Graph(
 )
 
 # Neo4j Character Setting
-graph = Graph(
+character_graph = Graph(
     host=CHARACTER_NEO4J_HOST,
     http_port=CHARACTER_NEO4J_HTTP_PORT,
     user=CHARACTER_NEO4J_USER,
@@ -588,18 +588,29 @@ def get_info_detail_by_eid():
 """  ========================================知识图谱管理 开始================================================== """
 
 
-@app.route('/api/graph_demo', methods=['POST'])
+@app.route('/api/graph_search', methods=['POST'])
 @allow_cross_domain
-def graph_demo():
+def graph_search():
     """
-    Neo4j图数据库 demo
+    Neo4j图数据库
+    START x=node(*) MATCH (x)-[*0..3]-(y) where x.name='AI' RETURN x,y
     :return:
     """
-    # todo 待修改
-    cypher_query = "START   n = Node(14698)    MATCH(n) -->(x)    RETURN    x, n"
-
-    x = graph.run(cypher_query)
-    return jsonify({"graph": list(x._source.buffer)})
+    if not request.json or not 'search_text' in request.json:
+        abort(400)
+    search_text = request.get_json().get('search_text')
+    cypher = "START x=node(*) MATCH (x)<-[r]-(y) where x.name=\'" + search_text + "\' RETURN y"
+    c = graph.run(cypher).data()
+    event = c[0]['y']['name']
+    x = graph.run("START x=node(*) MATCH (x)-[r]->(y) where x.name=\'" + event + "\'  RETURN *").data()
+    nodes, links = []
+    nodes.append(x[0].get('x'))
+    for i in range(len(x)):
+        nodes.append(x[i].get('y'))
+        data = [{'source': 0, 'target': (i + 1), 'type': x[i].get('r')['edge'], 'eid': x[i].get('y')['eid']}]
+        links.append(data)
+    nodes = json.loads(json.dumps(nodes, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
+    return jsonify({"nodes": nodes, "links": links})
 
 
 """  ========================================知识图谱管理 结束================================================== """
