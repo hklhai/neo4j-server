@@ -314,7 +314,7 @@ def book_detail():
 """  ========================================小说信息管理 结束================================================== """
 
 
-@app.route('/api/detail', methods=['POST'])
+@app.route('/api/news/detail', methods=['POST'])
 @allow_cross_domain
 def get_detail_by_eid():
     """
@@ -349,13 +349,16 @@ def chapter_add():
         bookid = request.get_json().get('bookid')
         chapterversion = request.get_json().get('chapterversion')
         charactersetting = request.get_json().get('charactersetting')
+        chapternumber = request.get_json().get('chapternumber')
+        bookname = request.get_json().get('bookname')
 
         create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         body = {"chaptername": chaptername, "chapterabstract": chapterabstract, "chaptercontent": chaptercontent,
                 "bookid": bookid, "chapterversion": str(chapterversion), "charactersetting": str(charactersetting),
-                "create_date": create_date, "edit_date": edit_date}
+                "create_date": create_date, "edit_date": edit_date, "chapternumber": chapternumber,
+                "bookname": bookname}
 
         result = es.index(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
         return jsonify({'code': 1, 'message': '新增章节成功', "eid": result['_id']})
@@ -383,6 +386,8 @@ def chapter_edit():
         charactersetting = request.get_json().get('charactersetting')
         chapterversion = request.get_json().get('chapterversion')
         chapterfinish = request.get_json().get('chapterfinish')
+        chapternumber = request.get_json().get('chapternumber')
+        bookname = request.get_json().get('bookname')
 
         if chapterfinish == 1:
             work = db.session.query(Work).filter_by(eid=eid, dellabel=0).first()
@@ -395,8 +400,8 @@ def chapter_edit():
 
         edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         body = {"chaptername": chaptername, "chapterabstract": chapterabstract, "chaptercontent": chaptercontent,
-                "bookid": bookid, "create_date": create_date, "edit_date": edit_date,
-                "charactersetting": str(charactersetting), "chapterversion": str(chapterversion)}
+                "bookid": bookid, "create_date": create_date, "edit_date": edit_date, "chapternumber": chapternumber,
+                "charactersetting": str(charactersetting), "chapterversion": str(chapterversion), "bookname": bookname}
         es.index(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body, id=eid)
         return jsonify({'code': 1, 'message': '修改章节成功'})
     except Exception as err:
@@ -415,7 +420,7 @@ def chapter_list():
         abort(400)
     try:
         bookid = request.get_json().get('bookid')
-        query = {'query': {'term': {'bookid': bookid}}}
+        query = {'query': {'term': {'bookid': bookid}}, "sort": [{"chapternumber": {"order": "asc"}}]}
         all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query)
         return jsonify(all_doc['hits']['hits'])
     except Exception as err:
@@ -603,14 +608,15 @@ def graph_search():
     c = graph.run(cypher).data()
     event = c[0]['y']['name']
     x = graph.run("START x=node(*) MATCH (x)-[r]->(y) where x.name=\'" + event + "\'  RETURN *").data()
-    nodes, links = []
+    nodes = []
+    links = []
     nodes.append(x[0].get('x'))
     for i in range(len(x)):
         nodes.append(x[i].get('y'))
-        data = [{'source': 0, 'target': (i + 1), 'type': x[i].get('r')['edge'], 'eid': x[i].get('y')['eid']}]
+        data = {'source': 0, 'target': (i + 1), 'type': x[i].get('r')['edge'], 'eid': x[i].get('y')['eid']}
         links.append(data)
     nodes = json.loads(json.dumps(nodes, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
-    return jsonify({"nodes": nodes, "links": links})
+    return jsonify({"nodes": nodes, "edges": links})
 
 
 """  ========================================知识图谱管理 结束================================================== """
