@@ -53,14 +53,14 @@ graph = Graph(
     user=NEO4J_USER,  # 数据库user name，如果没有更改过，应该是neo4j
     password=NEO4J_PASSWORD  # 自己设定的密码
 )
-
-# Neo4j Character Setting
-character_graph = Graph(
-    host=CHARACTER_NEO4J_HOST,
-    http_port=CHARACTER_NEO4J_HTTP_PORT,
-    user=CHARACTER_NEO4J_USER,
-    password=CHARACTER_NEO4J_PASSWORD
-)
+#
+# # Neo4j Character Setting
+# character_graph = Graph(
+#     host=CHARACTER_NEO4J_HOST,
+#     http_port=CHARACTER_NEO4J_HTTP_PORT,
+#     user=CHARACTER_NEO4J_USER,
+#     password=CHARACTER_NEO4J_PASSWORD
+# )
 
 
 def allow_cross_domain(fun):
@@ -606,6 +606,9 @@ def graph_search():
     search_text = request.get_json().get('search_text')
     cypher = "START x=node(*) MATCH (x)<-[r]-(y) where x.name=\'" + search_text + "\' RETURN y"
     c = graph.run(cypher).data()
+    if len(c) == 0:
+        return jsonify({"nodes": [], "edges": []})
+
     event = c[0]['y']['name']
     x = graph.run("START x=node(*) MATCH (x)-[r]->(y) where x.name=\'" + event + "\'  RETURN *").data()
     nodes = []
