@@ -2,3 +2,4 @@
 checkpoint
 poetry.*
 *.txt
+common/*

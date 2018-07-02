@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 # MYSQL
-SQLALCHEMY_DATABASE_URI = "mysql+pymysql://srwc:mysql@localhost/srwc"
+# SQLALCHEMY_DATABASE_URI = "mysql+pymysql://srwc:mysql@localhost/srwc"
 # MYSQL DEBUG
-# SQLALCHEMY_DATABASE_URI = "mysql+pymysql://root:mysql@spark1/srwc"
+SQLALCHEMY_DATABASE_URI = "mysql+pymysql://root:mysql@spark1/srwc"
 
 
 # ElasticSearch

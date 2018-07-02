@@ -54,13 +54,13 @@ graph = Graph(
     password=NEO4J_PASSWORD  # 自己设定的密码
 )
 #
-# # Neo4j Character Setting
-# character_graph = Graph(
-#     host=CHARACTER_NEO4J_HOST,
-#     http_port=CHARACTER_NEO4J_HTTP_PORT,
-#     user=CHARACTER_NEO4J_USER,
-#     password=CHARACTER_NEO4J_PASSWORD
-# )
+# Neo4j Character Setting
+character_graph = Graph(
+    host=CHARACTER_NEO4J_HOST,
+    http_port=CHARACTER_NEO4J_HTTP_PORT,
+    user=CHARACTER_NEO4J_USER,
+    password=CHARACTER_NEO4J_PASSWORD
+)
 
 
 def allow_cross_domain(fun):
@@ -230,16 +230,22 @@ def book_list():
     """
     if not request.json or not 'userid' in request.json:
         abort(400)
-
     userid = request.get_json().get('userid')
+    page_index = request.get_json().get('page_index')
+    page_size = request.get_json().get('page_size')
+
     from webapi.webapimodels import Book
-    books = db.session.query(Book).filter_by(userid=userid, booklabel=0).order_by(Book.bookstatus).all()
+    # books = db.session.query(Book).filter_by(userid=userid, booklabel=0).order_by(Book.bookstatus).all()
+    books = db.session.query(Book).filter_by(userid=userid, booklabel=0).order_by(Book.bookid).limit(
+        page_size).offset((page_index - 1) * page_size).all()
+    total = db.session.query(Book).filter_by(userid=userid, booklabel=0).count()
+
     lists = json.loads(json.dumps(books, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
     lists.sort(key=itemgetter('bookstatus'))
     group_by_books = groupby(lists, itemgetter('bookstatus'))
     dic = dict([(key, list(group)) for key, group in group_by_books])
     db.session.close()
-    return jsonify({"books": dic})
+    return jsonify({"books": dic, "total": total})
 
 
 @app.route('/api/editBook', methods=['POST'])
@@ -418,11 +424,18 @@ def chapter_list():
     """
     if not request.json or not 'bookid' in request.json:
         abort(400)
+
+    bookid = request.get_json().get('bookid')
+    page_index = request.get_json().get('page_index') - 1
+    page_size = request.get_json().get('page_size')
+
     try:
-        bookid = request.get_json().get('bookid')
-        query = {'query': {'term': {'bookid': bookid}}, "sort": [{"chapternumber": {"order": "asc"}}]}
+        query = {'query': {'term': {'bookid': bookid}}, "sort": [{"chapternumber": {"order": "asc"}}],
+                 "from": page_index, "size": page_size}
+        query_total = {'query': {'term': {'bookid': bookid}}}
         all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query)
-        return jsonify(all_doc['hits']['hits'])
+        total = es.count(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query_total)
+        return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '查询失败'})
@@ -626,6 +639,43 @@ def graph_search():
 
 """  ========================================人物设定管理 开始================================================== """
 
+
+@app.route('/api/char_graph_search', methods=['POST'])
+@allow_cross_domain
+def char_graph_search():
+    """
+    :return:
+    """
+    if not request.json or not 'eid' in request.json:
+        abort(400)
+    eid = request.get_json().get('eid')
+    x = character_graph.run(
+        "START x=node(*) MATCH (x)-[r]->(y) where y.eid=\'" + eid + "\' or r.eid=\'" + eid + "\'  RETURN *").data()
+    nodes_list = []
+    nodes = []
+    links = []
+
+    # set去除重复
+    for i in range(len(x)):
+        nodes.append(x[i].get('x'))
+        nodes.append(x[i].get('y'))
+
+    nodes = list(set(nodes))
+
+    for i in range(len(nodes)):
+        nodes_list.append(nodes[i]['name'])
+
+    nodes_indexes = list(range(len(nodes_list)))
+    nodes_dict = dict(zip(nodes_list, nodes_indexes))
+
+    for i in range(len(x)):
+        data = {'source': nodes_dict[x[i]['x']['name']], 'target': nodes_dict[x[i]['y']['name']],
+                'type': x[i].get('r')['edge'], 'eid': x[i].get('y')['eid']}
+        links.append(data)
+    nodes = json.loads(json.dumps(nodes, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
+    return jsonify({"nodes": nodes, "edges": links})
+
+
 """  ========================================人物设定管理 结束================================================== """
 
 
@@ -642,3 +692,5 @@ def not_found(error):
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=8888, debug=True)
+    # todo
+    # app.run(host="0.0.0.0", port=8888)
