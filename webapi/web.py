@@ -16,7 +16,7 @@ from flask_cors import CORS
 from flask_login import LoginManager
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
-from py2neo import Graph
+from py2neo import Graph, Node, Relationship, NodeSelector
 from werkzeug.security import check_password_hash, generate_password_hash
 
 sys.path.append(os.path.dirname(os.getcwd()))
@@ -170,16 +170,19 @@ def register():
     """
     注册
     """
-    if not request.json or not 'username' in request.json:
+    if not request.json or not 'username' in request.json or not 'phoneNum' in request.json or not 'sex' in request.json:
         abort(400)
 
     username = request.get_json().get('username')
+    phoneNum = request.get_json().get('phoneNum')
+    sex = request.get_json().get('sex')
     from webapi.webapimodels import User
     user = User.query.filter_by(username=username).first()
     if user is not None:
         return jsonify({'code': 0, 'message': '用户名已存在！'})
 
-    user = User(username=username, password=generate_password_hash(request.get_json().get('password')))
+    user = User(username=username, password=generate_password_hash(request.get_json().get('password')),
+                phoneNum=phoneNum, sex=sex)
     db.session.add(user)
     db.session.commit()
     db.session.close()
@@ -198,12 +201,17 @@ def add_book():
     新建小说
     :return: 新建成功 | 已经存在
     """
-    if not request.json or not 'userid' in request.json or not 'bookname' in request.json:
+    if not request.json or not 'userid' in request.json or not 'bookname' in request.json or not 'category' in request.json or not 'label' in request.json or not 'abstract' in request.json or not 'writing' in request.json:
         abort(400)
 
     bookname = request.get_json().get('bookname')
+    category = request.get_json().get('category')
+    label = request.get_json().get('label')
+    abstract = request.get_json().get('abstract')
+    writing = request.get_json().get('writing')
+
     from webapi.webapimodels import Book
-    book = Book.query.filter_by(bookname=bookname).first()
+    book = db.session.query(Book).filter_by(bookname=bookname).first()
     if book is not None:
         return jsonify({'code': 0, 'message': '本小说已存在，请确认后新建！'})
 
@@ -211,6 +219,10 @@ def add_book():
         bookname=request.get_json().get('bookname'),
         userid=request.get_json().get('userid'),
         createtime=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        category=category,
+        label=label,
+        abstract=abstract,
+        writing=writing,
         bookstatus=0,
         booklabel=0
     )
@@ -235,7 +247,6 @@ def book_list():
     page_size = request.get_json().get('page_size')
 
     from webapi.webapimodels import Book
-    # books = db.session.query(Book).filter_by(userid=userid, booklabel=0).order_by(Book.bookstatus).all()
     books = db.session.query(Book).filter_by(userid=userid, booklabel=0).order_by(Book.bookid).limit(
         page_size).offset((page_index - 1) * page_size).all()
     total = db.session.query(Book).filter_by(userid=userid, booklabel=0).count()
@@ -255,17 +266,26 @@ def book_edit():
     更新图书信息
     :return: 当前用户图书列表
     """
-    if not request.json or not 'bookid' in request.json:
+    if not request.json or not 'bookid' in request.json or not 'category' in request.json or not 'label' in request.json or not 'abstract' in request.json or not 'writing' in request.json:
         abort(400)
     bookid = request.get_json().get('bookid')
     bookname = request.get_json().get('bookname')
     bookstatus = request.get_json().get('bookstatus')
+    category = request.get_json().get('category')
+    label = request.get_json().get('label')
+    abstract = request.get_json().get('abstract')
+    writing = request.get_json().get('writing')
+
     from webapi.webapimodels import Book
-    # todo
-    book = Book.query.filter_by(bookid=bookid).first()
+    book = db.session.query(Book).filter_by(bookid=bookid).first()
     if book is not None:
         book.bookname = bookname
         book.bookstatus = bookstatus
+        book.category = category
+        book.label = label
+        book.abstract = abstract
+        book.writing = writing
+
         db.session.merge(book)
         db.session.flush()
         db.session.commit()
@@ -516,14 +536,91 @@ def info_add():
             charactersetting = request.get_json().get('charactersetting')
             bookid = request.get_json().get('bookid')
             body = {"chapterabstract": chapterabstract, "bookid": bookid, "charactersetting": str(charactersetting)}
+            result = es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body)
+            eid = result['_id']
 
-            es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body)
-            return jsonify({'code': 1, 'message': '新增成功'})
+            # 保存信息至Neo4J
+            selector = NodeSelector(character_graph)
+            setting = json.loads(chapterabstract)
+            peoples = setting['people']
+            extract_realtion_persist_to_neo4j(eid, peoples, selector)
+
+            return jsonify({'code': 1, 'message': '新增成功', "eid": eid})
         else:
             return jsonify({'code': 0, 'message': '大纲已存在'})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '新增失败'})
+
+
+def extract_realtion_persist_to_neo4j(eid, peoples, selector):
+    """
+    抽取json关系持久化至Neo4j
+
+    :param eid: 保存小说整体信息eid
+    :param peoples: 人物设定json
+    :param selector:  neo4j selector
+    """
+    for j in range(len(peoples)):
+        node_name = peoples[j]['name']
+        node_list = selector.select("Person", name=node_name, eid=eid)
+        if len(list(node_list)) == 0:
+            node = Node("Person", name=node_name, eid=eid, image="PERSON.PNG")
+            titles = peoples[j]['titles'].split(",")
+            for i in range(len(titles)):
+                node['title'] = titles[i]
+
+            characters = peoples[j]['characters'].split(",")
+            for i in range(len(characters)):
+                node['character'] = characters[i]
+            character_graph.create(node)
+
+            relationship = peoples[j]['relationship']
+            for relation in relationship:
+                print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
+                # 先判断关系节点是否存在
+                find_code = character_graph.find_one(label="Person", property_key="name",
+                                                     property_value=relation['being'])
+                if find_code is None:
+                    node2 = Node("Person", name=relation['being'], eid=eid, image="PERSON.PNG")
+                    character_graph.create(node2)
+                    node_call_node_2 = Relationship(node, relation['realtion'], node2)
+                    node_call_node_2['edge'] = relation['realtion']
+                    node_call_node_2['eid'] = eid
+                    character_graph.create(node_call_node_2)
+                else:
+                    node_call_node_2 = Relationship(node, relation['realtion'], find_code)
+                    node_call_node_2['edge'] = relation['realtion']
+                    node_call_node_2['eid'] = eid
+                    character_graph.create(node_call_node_2)
+        else:
+            titles = peoples[j]['titles'].split(",")
+            node = list(node_list)[0]
+            for i in range(len(titles)):
+                node['title'] = titles[i]
+
+            characters = peoples[j]['characters'].split(",")
+            for i in range(len(characters)):
+                node['character'] = characters[i]
+
+            relationship = peoples[j]['relationship']
+            for relation in relationship:
+                print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
+                # 先判断关系节点是否存在
+                find_code = character_graph.find_one(label="Person", property_key="name",
+                                                     property_value=relation['being'])
+                if find_code is None:
+                    node2 = Node("Person", name=relation['being'], eid=eid, image="PERSON.PNG")
+                    character_graph.create(node2)
+                    node_call_node_2 = Relationship(node, relation['realtion'], node2)
+                    node_call_node_2['edge'] = relation['realtion']
+                    node_call_node_2['eid'] = eid
+                    character_graph.create(node_call_node_2)
+                else:
+                    node_call_node_2 = Relationship(node, relation['realtion'], find_code)
+                    node_call_node_2['edge'] = relation['realtion']
+                    node_call_node_2['eid'] = eid
+                    character_graph.create(node_call_node_2)
 
 
 @app.route('/api/info/edit', methods=['POST'])

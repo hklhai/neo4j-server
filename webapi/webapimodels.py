@@ -17,6 +17,8 @@ class User(UserMixin, db.Model):
     uid = db.Column(db.Integer, autoincrement=True, primary_key=True)
     username = db.Column(db.String(60), unique=True)
     password = db.Column(db.String(200), default="")
+    phoneNum = db.Column(db.Integer)
+    sex = db.Column(db.String(2))
 
     def __init__(self, username, password):
         self.username = username
@@ -50,6 +52,10 @@ class Book(db.Model):
     createtime = db.Column(db.DateTime)
     imgurl = db.Column(db.String(60))
     booklabel = db.Column(db.Integer)
+    category = db.Column(db.String(20))
+    label = db.Column(db.String(20))
+    abstract = db.Column(db.String(1000))
+    writing = db.Column(db.String(500))
 
     def get_id(self):
         return self.bookid
