@@ -563,7 +563,7 @@ def info_add():
 
             # 保存信息至Neo4J
             selector = NodeSelector(character_graph)
-            setting = json.loads(chapterabstract)
+            setting = json.loads(str(chapterabstract))
             peoples = setting['people']
             extract_realtion_persist_to_neo4j(eid, peoples, selector)
 
@@ -573,6 +573,41 @@ def info_add():
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '新增失败'})
+
+
+@app.route('/api/info/edit', methods=['POST'])
+@allow_cross_domain
+def info_edit():
+    """
+    更新ElasticSearch总体信息
+    :return:
+    """
+    if not request.json or not 'bookid' in request.json or not 'eid' in request.json:
+        abort(400)
+    try:
+        chapterabstract = request.get_json().get('chapterabstract')
+        charactersetting = request.get_json().get('charactersetting')
+        bookid = request.get_json().get('bookid')
+        eid = request.get_json().get('eid')
+
+        body = {"chapterabstract": chapterabstract, "bookid": bookid, "charactersetting": str(charactersetting)}
+        es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body, id=eid)
+
+        # 先删除
+        cypher = "start n=node(*) match p=(n)-[*0..3]->(b) where n.eid = \'" + eid + "\'  or b.eid = \'" + eid + "\'  delete  p "
+        character_graph.run(cypher)
+
+        # 保存信息至Neo4J
+        selector = NodeSelector(character_graph)
+        setting = json.loads(str(charactersetting))
+        peoples = setting['people']
+        extract_realtion_persist_to_neo4j(eid, peoples, selector)
+
+        return jsonify({'code': 1, 'message': '修改成功'})
+
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '修改失败'})
 
 
 def extract_realtion_persist_to_neo4j(eid, peoples, selector):
@@ -643,29 +678,6 @@ def extract_realtion_persist_to_neo4j(eid, peoples, selector):
                     node_call_node_2['edge'] = relation['realtion']
                     node_call_node_2['eid'] = eid
                     character_graph.create(node_call_node_2)
-
-
-@app.route('/api/info/edit', methods=['POST'])
-@allow_cross_domain
-def info_edit():
-    """
-    更新ElasticSearch总体信息
-    :return:
-    """
-    if not request.json or not 'bookid' in request.json or not 'eid' in request.json:
-        abort(400)
-    try:
-        chapterabstract = request.get_json().get('chapterabstract')
-        charactersetting = request.get_json().get('charactersetting')
-        bookid = request.get_json().get('bookid')
-        eid = request.get_json().get('eid')
-
-        body = {"chapterabstract": chapterabstract, "bookid": bookid, "charactersetting": str(charactersetting)}
-        es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body, id=eid)
-        return jsonify({'code': 1, 'message': '修改成功'})
-    except Exception as err:
-        print(err)
-        return jsonify({'code': 0, 'message': '修改失败'})
 
 
 @app.route('/api/info/query', methods=['POST'])
