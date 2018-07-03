@@ -102,8 +102,6 @@ def work_save():
         abort(400)
     eid = request.get_json().get('eid')
     userid = request.get_json().get('userid')
-    # bookname = request.get_json().get('bookname')
-    # todo
     dellabel = 0
     workmodule = "editer"
     work = db.session.query(Work).filter_by(userid=userid, dellabel=0).first()
@@ -134,7 +132,8 @@ def login():
     username = request.get_json().get('username')
     password = request.get_json().get('password')
     from webapi.webapimodels import User
-    user = User.query.filter_by(username=username).first()
+    user = db.session.query(User).filter_by(username=username).first()
+
     db.session.close()
     if user is not None and check_password_hash(user.password, password):
         return jsonify({'code': 1, 'message': '成功登录', 'username': user.username, 'userid': user.uid})
@@ -170,19 +169,20 @@ def register():
     """
     注册
     """
-    if not request.json or not 'username' in request.json or not 'phoneNum' in request.json or not 'sex' in request.json:
+    if not request.json or not 'username' in request.json or not 'phonenumber' in request.json or not 'sex' in request.json:
         abort(400)
 
     username = request.get_json().get('username')
-    phoneNum = request.get_json().get('phoneNum')
+    phonenumber = request.get_json().get('phonenumber')
     sex = request.get_json().get('sex')
     from webapi.webapimodels import User
-    user = User.query.filter_by(username=username).first()
+    user = db.session.query(User).filter_by(username=username).first()
+
     if user is not None:
         return jsonify({'code': 0, 'message': '用户名已存在！'})
 
     user = User(username=username, password=generate_password_hash(request.get_json().get('password')),
-                phoneNum=phoneNum, sex=sex)
+                phonenumber=phonenumber, sex=sex)
     db.session.add(user)
     db.session.commit()
     db.session.close()
@@ -298,20 +298,42 @@ def book_edit():
 
 @app.route('/api/deleteBook', methods=['POST'])
 @allow_cross_domain
-def book_delete():
+def book_logic_delete():
     """
-    删除图书信息
+    逻辑删除图书信息
     :return:
     """
     if not request.json or not 'bookid' in request.json:
         abort(400)
     bookid = request.get_json().get('bookid')
     from webapi.webapimodels import Book
-    book = Book.query.filter_by(bookid=bookid).first()
+    book = db.session.query(Book).filter_by(bookid=bookid).first()
     if book is not None:
         book.booklabel = 1
         db.session.merge(book)
         db.session.flush()
+        db.session.commit()
+        db.session.close()
+        return jsonify({'code': 1, 'message': '删除小说成功'})
+    else:
+        db.session.close()
+        return jsonify({'code': 0, 'message': '删除小说失败'})
+
+
+@app.route('/api/book/complet/edelete', methods=['POST'])
+@allow_cross_domain
+def book_complete_delete():
+    """
+    完全删除图书信息
+    :return:
+    """
+    if not request.json or not 'bookid' in request.json:
+        abort(400)
+    bookid = request.get_json().get('bookid')
+    from webapi.webapimodels import Book
+    book = db.session.query(Book).filter_by(bookid=bookid).first()
+    if book is not None:
+        db.session.delete(book)
         db.session.commit()
         db.session.close()
         return jsonify({'code': 1, 'message': '删除小说成功'})

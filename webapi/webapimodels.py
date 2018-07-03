@@ -17,12 +17,14 @@ class User(UserMixin, db.Model):
     uid = db.Column(db.Integer, autoincrement=True, primary_key=True)
     username = db.Column(db.String(60), unique=True)
     password = db.Column(db.String(200), default="")
-    phoneNum = db.Column(db.Integer)
+    phonenumber = db.Column(db.BIGINT)
     sex = db.Column(db.String(2))
 
-    def __init__(self, username, password):
+    def __init__(self, username, password, phonenumber, sex):
         self.username = username
         self.password = password
+        self.phonenumber = phonenumber
+        self.sex = sex
 
     def get_id(self):
         return self.uid
