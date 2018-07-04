@@ -737,6 +737,35 @@ def get_info_detail_by_eid():
 """  ========================================知识图谱管理 开始================================================== """
 
 
+@app.route('/api/search/list', methods=['POST'])
+@allow_cross_domain
+def search_list():
+    """
+    查询命名体识别信息
+    :return:
+    """
+    if not request.json or not 'search_text' in request.json:
+        abort(400)
+
+    search_text = request.get_json().get('search_text')
+    page_index = request.get_json().get('page_index') - 1
+    page_size = request.get_json().get('page_size')
+
+    try:
+        # query = {'query': {'term': {'search_text': search_text}}, "from": page_index, "size": page_size,
+        #          "highlight": {"fields": {"search_text": {}}}}
+
+        query = {'query': {'match': {'search_text': search_text}}, "from": page_index, "size": page_size,
+                 "highlight": {"fields": {"search_text": {}}}}
+        query_total = {'query': {'term': {'search_text': search_text}}}
+        all_doc = es.search(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query)
+        total = es.count(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query_total)
+        return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '查询失败'})
+
+
 @app.route('/api/graph_search', methods=['POST'])
 @allow_cross_domain
 def graph_search():
@@ -745,16 +774,18 @@ def graph_search():
     START x=node(*) MATCH (x)-[*0..3]-(y) where x.name='AI' RETURN x,y
     :return:
     """
-    if not request.json or not 'search_text' in request.json:
+    if not request.json or not 'search_text' in request.json or not 'eid' in request.json:
         abort(400)
     search_text = request.get_json().get('search_text')
-    cypher = "START x=node(*) MATCH (x)<-[r]-(y) where x.name=\'" + search_text + "\' RETURN y"
+    eid = request.get_json().get('eid')
+
+    cypher = "START x=node(*) MATCH (x)<-[r]-(y) where x.name=\'" + search_text + "\' and  x.eid=\'" + eid + "\' RETURN y"
     c = graph.run(cypher).data()
     if len(c) == 0:
         return jsonify({"nodes": [], "edges": []})
 
     event = c[0]['y']['name']
-    x = graph.run("START x=node(*) MATCH (x)-[r]->(y) where x.name=\'" + event + "\'  RETURN *").data()
+    x = graph.run("START x=node(*) MATCH (x)-[r]->(y) where x.name=\'" + event + "\'  RETURN * LIMIT 30").data()
     nodes = []
     links = []
     nodes.append(x[0].get('x'))
@@ -781,7 +812,7 @@ def char_graph_search():
         abort(400)
     eid = request.get_json().get('eid')
     x = character_graph.run(
-        "START x=node(*) MATCH (x)-[r]->(y) where y.eid=\'" + eid + "\' or r.eid=\'" + eid + "\'  RETURN *").data()
+        "START x=node(*) MATCH (x)-[r]->(y) where y.eid=\'" + eid + "\' or r.eid=\'" + eid + "\'  RETURN * ").data()
     nodes_list = []
     nodes = []
     links = []
