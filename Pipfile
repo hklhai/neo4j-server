@@ -8,7 +8,7 @@ flask = "*"
 nltk = "*"
 gensim = "*"
 pyhanlp = "*"
-"py2neo" = "*"
+py2neo = "*"
 pyltp = "*"
 elasticsearch = "*"
 flask-httpauth = "*"
@@ -31,6 +31,7 @@ coverage = "*"
 jsonplus = "*"
 flask-restful = "*"
 flask-cors = "*"
+gunicorn = "*"
 
 [dev-packages]
 
