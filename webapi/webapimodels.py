@@ -20,14 +20,14 @@ class User(UserMixin, db.Model):
     phonenumber = db.Column(db.BIGINT)
     sex = db.Column(db.String(2))
 
+    def get_id(self):
+        return self.uid
+
     def __init__(self, username, password, phonenumber, sex):
         self.username = username
         self.password = password
         self.phonenumber = phonenumber
         self.sex = sex
-
-    def get_id(self):
-        return self.uid
 
     def __repr__(self):
         return '<User %r>' % self.username
@@ -51,6 +51,27 @@ class Book(db.Model):
     bookname = db.Column(db.String(255), unique=True)
     userid = db.Column(db.Integer)
     bookstatus = db.Column(db.Integer)
+    createtime = db.Column(db.DateTime)
+    imgurl = db.Column(db.String(60))
+    booklabel = db.Column(db.Integer)
+    category = db.Column(db.String(20))
+    label = db.Column(db.String(20))
+    abstract = db.Column(db.String(1000))
+    writing = db.Column(db.String(500))
+
+    def get_id(self):
+        return self.bookid
+
+
+class VBook(db.Model):
+    """
+    VBook Mdoel  小说信息
+    """
+    __tablename__ = 'v_book'
+    bookid = db.Column(db.Integer, primary_key=True)
+    bookname = db.Column(db.String(255), unique=True)
+    userid = db.Column(db.Integer)
+    bookstatus = db.Column(db.String(30))
     createtime = db.Column(db.DateTime)
     imgurl = db.Column(db.String(60))
     booklabel = db.Column(db.Integer)

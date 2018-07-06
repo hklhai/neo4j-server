@@ -180,17 +180,28 @@ def register():
 
     from webapi.webapimodels import User
     if username == "":
-        username = phonenumber
+        username = str(phonenumber)
         user = db.session.query(User).filter_by(phonenumber=phonenumber).first()
         if user is not None:
             return jsonify({'code': 0, 'message': '手机号已存在！'})
+        user = db.session.query(User).filter_by(username=username).first()
+        if user is not None:
+            return jsonify({'code': 0, 'message': '用户名已存在！'})
     else:
         user = db.session.query(User).filter_by(username=username).first()
         if user is not None:
             return jsonify({'code': 0, 'message': '用户名已存在！'})
+        user = db.session.query(User).filter_by(phonenumber=phonenumber).first()
+        if user is not None:
+            return jsonify({'code': 0, 'message': '手机号已存在！'})
 
-    user = User(username=username, password=generate_password_hash(request.get_json().get('password')),
-                phonenumber=phonenumber, sex=sex)
+    user = User(
+        username=username,
+        password=generate_password_hash(request.get_json().get('password')),
+        phonenumber=phonenumber,
+        sex=sex
+    )
+
     db.session.add(user)
     db.session.commit()
     db.session.close()
@@ -254,12 +265,13 @@ def book_list():
     page_index = request.get_json().get('page_index')
     page_size = request.get_json().get('page_size')
 
-    from webapi.webapimodels import Book
-    books = db.session.query(Book).filter_by(userid=userid, booklabel=0).order_by(Book.bookid).limit(
+    from webapi.webapimodels import VBook
+    books = db.session.query(VBook).filter_by(userid=userid, booklabel=0).order_by(VBook.bookid).limit(
         page_size).offset((page_index - 1) * page_size).all()
-    total = db.session.query(Book).filter_by(userid=userid, booklabel=0).count()
+    total = db.session.query(VBook).filter_by(userid=userid, booklabel=0).count()
 
     lists = json.loads(json.dumps(books, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
+
     lists.sort(key=itemgetter('bookstatus'))
     group_by_books = groupby(lists, itemgetter('bookstatus'))
     dic = dict([(key, list(group)) for key, group in group_by_books])
