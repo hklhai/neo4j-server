@@ -132,11 +132,13 @@ def login():
     username = request.get_json().get('username')
     password = request.get_json().get('password')
     from webapi.webapimodels import User
-    user = db.session.query(User).filter_by(username=username).first()
-
+    u_username = db.session.query(User).filter_by(username=username).first()
+    u_phonenumber = db.session.query(User).filter_by(phonenumber=username).first()
     db.session.close()
-    if user is not None and check_password_hash(user.password, password):
-        return jsonify({'code': 1, 'message': '成功登录', 'username': user.username, 'userid': user.uid})
+    if u_username is not None and check_password_hash(u_username.password, password):
+        return jsonify({'code': 1, 'message': '成功登录', 'username': u_username.username, 'userid': u_username.uid})
+    elif u_phonenumber is not None and check_password_hash(u_phonenumber.password, password):
+        return jsonify({'code': 1, 'message': '成功登录', 'username': u_phonenumber.username, 'userid': u_phonenumber.uid})
     else:
         flash('用户或密码错误')
         return jsonify({'code': 0, 'message': '用户名或密码错误'})
@@ -175,11 +177,17 @@ def register():
     username = request.get_json().get('username')
     phonenumber = request.get_json().get('phonenumber')
     sex = request.get_json().get('sex')
-    from webapi.webapimodels import User
-    user = db.session.query(User).filter_by(username=username).first()
 
-    if user is not None:
-        return jsonify({'code': 0, 'message': '用户名已存在！'})
+    from webapi.webapimodels import User
+    if username == "":
+        username = phonenumber
+        user = db.session.query(User).filter_by(phonenumber=phonenumber).first()
+        if user is not None:
+            return jsonify({'code': 0, 'message': '手机号已存在！'})
+    else:
+        user = db.session.query(User).filter_by(username=username).first()
+        if user is not None:
+            return jsonify({'code': 0, 'message': '用户名已存在！'})
 
     user = User(username=username, password=generate_password_hash(request.get_json().get('password')),
                 phonenumber=phonenumber, sex=sex)
@@ -853,8 +861,7 @@ def not_found(error):
 
 
 if __name__ == '__main__':
-    # app.run(host="0.0.0.0", port=8888, debug=True)
-
-    from werkzeug.contrib.fixers import ProxyFix
-    app.wsgi_app = ProxyFix(app.wsgi_app)
-    app.run()
+    app.run(host="0.0.0.0", port=8888, debug=True)
+    # from werkzeug.contrib.fixers import ProxyFix
+    # app.wsgi_app = ProxyFix(app.wsgi_app)
+    # app.run()

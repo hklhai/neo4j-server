@@ -3,3 +3,4 @@ checkpoint
 poetry.*
 *.txt
 common/*
+webapi/nohup.out
