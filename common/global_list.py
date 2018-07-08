@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 
-# MYSQL
-SQLALCHEMY_DATABASE_URI = "mysql+pymysql://srwc:mysql@localhost/srwc"
-# MYSQL DEBUG
-# SQLALCHEMY_DATABASE_URI = "mysql+pymysql://root:mysql@spark1/srwc"
+
+# DEV_MODE = "DEBUG"
+DEV_MODE = "FML"
+
+if DEV_MODE == "DEBUG":
+    SQLALCHEMY_DATABASE_URI = "mysql+pymysql://root:mysql@spark1/srwc"
+else:
+    SQLALCHEMY_DATABASE_URI = "mysql+pymysql://srwc:mysql@localhost/srwc"
 
 # ElasticSearch
 HOST_PORT = 'spark3:9200'

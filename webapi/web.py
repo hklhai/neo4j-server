@@ -873,8 +873,10 @@ def not_found(error):
 
 
 if __name__ == '__main__':
-    # app.run(host="0.0.0.0", port=8888, debug=True)
-    from werkzeug.contrib.fixers import ProxyFix
+    if DEV_MODE == "DEBUG":
+        app.run(host="0.0.0.0", port=8888, debug=True)
+    else:
+        from werkzeug.contrib.fixers import ProxyFix
 
-    app.wsgi_app = ProxyFix(app.wsgi_app)
-    app.run()
+        app.wsgi_app = ProxyFix(app.wsgi_app)
+        app.run()
