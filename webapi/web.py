@@ -557,14 +557,14 @@ def chapter_count():
 
 """  ========================================章节信息管理 结束================================================== """
 
-"""  ========================================总体信息管理 开始================================================== """
+"""  ========================================人物设定管理 开始================================================== """
 
 
-@app.route('/api/info/add', methods=['POST'])
+@app.route('/api/character/add', methods=['POST'])
 @allow_cross_domain
-def info_add():
+def character_add():
     """
-    持久化总体信息至elasticsearch
+    持久化人物设定信息至elasticsearch
     :return:
     """
     if not request.json or not 'bookid' in request.json:
@@ -572,62 +572,96 @@ def info_add():
     try:
         bookid = request.get_json().get('bookid')
         query = {'query': {'term': {'bookid': bookid}}}
-        all_doc = es.search(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=query)
+        all_doc = es.search(index=CHARACTER_INDEX, doc_type=CHARACTER_TYPE, body=query)
         if len(all_doc['hits']['hits']) == 0:
-            chapterabstract = request.get_json().get('chapterabstract')
             charactersetting = request.get_json().get('charactersetting')
             bookid = request.get_json().get('bookid')
-            body = {"chapterabstract": chapterabstract, "bookid": bookid, "charactersetting": str(charactersetting)}
-            result = es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body)
+            body = {"bookid": bookid, "charactersetting": str(charactersetting)}
+            result = es.index(index=CHARACTER_INDEX, doc_type=CHARACTER_TYPE, body=body)
             eid = result['_id']
 
-            # 保存信息至Neo4J
-            selector = NodeSelector(character_graph)
-            setting = json.loads(str(chapterabstract))
+            setting = json.loads(str(charactersetting))
             peoples = setting['people']
-            extract_realtion_persist_to_neo4j(eid, peoples, selector)
-
+            # 保存信息至Neo4J
+            if not len(peoples) == 0:
+                selector = NodeSelector(character_graph)
+                extract_realtion_persist_to_neo4j(eid, peoples, selector)
             return jsonify({'code': 1, 'message': '新增成功', "eid": eid})
         else:
-            return jsonify({'code': 0, 'message': '大纲已存在'})
+            return jsonify({'code': 0, 'message': '人物设定已存在'})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '新增失败'})
 
 
-@app.route('/api/info/edit', methods=['POST'])
+@app.route('/api/character/edit', methods=['POST'])
 @allow_cross_domain
-def info_edit():
+def character_edit():
     """
-    更新ElasticSearch总体信息
+    更新ElasticSearch人物设定信息
     :return:
     """
     if not request.json or not 'bookid' in request.json or not 'eid' in request.json:
         abort(400)
     try:
-        chapterabstract = request.get_json().get('chapterabstract')
         charactersetting = request.get_json().get('charactersetting')
         bookid = request.get_json().get('bookid')
         eid = request.get_json().get('eid')
 
-        body = {"chapterabstract": chapterabstract, "bookid": bookid, "charactersetting": str(charactersetting)}
-        es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body, id=eid)
+        body = {"bookid": bookid, "charactersetting": str(charactersetting)}
+        es.index(index=CHARACTER_INDEX, doc_type=CHARACTER_TYPE, body=body, id=eid)
 
         # 先删除
         cypher = "start n=node(*) match p=(n)-[*0..3]->(b) where n.eid = \'" + eid + "\'  or b.eid = \'" + eid + "\'  delete  p "
         character_graph.run(cypher)
 
         # 保存信息至Neo4J
-        selector = NodeSelector(character_graph)
         setting = json.loads(str(charactersetting))
         peoples = setting['people']
-        extract_realtion_persist_to_neo4j(eid, peoples, selector)
-
+        if not len(peoples) == 0:
+            selector = NodeSelector(character_graph)
+            extract_realtion_persist_to_neo4j(eid, peoples, selector)
         return jsonify({'code': 1, 'message': '修改成功'})
-
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '修改失败'})
+
+
+@app.route('/api/character/query', methods=['POST'])
+@allow_cross_domain
+def character_query():
+    """
+    通过bookid获取ElasticSearch人物设定信息
+    :return:
+    """
+    if not request.json or not 'bookid' in request.json:
+        abort(400)
+    try:
+        bookid = request.get_json().get('bookid')
+        query = {'query': {'term': {'bookid': bookid}}}
+        all_doc = es.search(index=CHARACTER_INDEX, doc_type=CHARACTER_TYPE, body=query)
+        return jsonify(all_doc['hits']['hits'])
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '查询失败'})
+
+
+@app.route('/api/character/delete', methods=['POST'])
+@allow_cross_domain
+def character_delete():
+    """
+    删除ElasticSearch人物设定信息
+    :return:
+    """
+    if not request.json or not 'eid' in request.json:
+        abort(400)
+    try:
+        eid = request.get_json().get('eid')
+        es.delete(index=CHARACTER_INDEX, doc_type=CHARACTER_TYPE, id=eid)
+        return jsonify({'code': 1, 'message': '删除成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '删除失败'})
 
 
 def extract_realtion_persist_to_neo4j(eid, peoples, selector):
@@ -654,7 +688,7 @@ def extract_realtion_persist_to_neo4j(eid, peoples, selector):
 
             relationship = peoples[j]['relationship']
             for relation in relationship:
-                print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
+                # print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
                 # 先判断关系节点是否存在
                 find_code = character_graph.find_one(label="Person", property_key="name",
                                                      property_value=relation['being'])
@@ -682,7 +716,7 @@ def extract_realtion_persist_to_neo4j(eid, peoples, selector):
 
             relationship = peoples[j]['relationship']
             for relation in relationship:
-                print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
+                # print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
                 # 先判断关系节点是否存在
                 find_code = character_graph.find_one(label="Person", property_key="name",
                                                      property_value=relation['being'])
@@ -700,11 +734,86 @@ def extract_realtion_persist_to_neo4j(eid, peoples, selector):
                     character_graph.create(node_call_node_2)
 
 
+"""  ========================================人物设定管理 结束================================================== """
+
+"""  ========================================故事大纲管理 开始================================================== """
+
+
+@app.route('/api/info/add', methods=['POST'])
+@allow_cross_domain
+def info_add():
+    """
+    持久化大纲信息至elasticsearch
+    :return:
+    """
+    if not request.json or not 'bookid' in request.json:
+        abort(400)
+    try:
+        bookid = request.get_json().get('bookid')
+        query = {'query': {'term': {'bookid': bookid}}}
+        all_doc = es.search(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=query)
+        if len(all_doc['hits']['hits']) == 0:
+            bookabstract = request.get_json().get('bookabstract')
+            bookid = request.get_json().get('bookid')
+            body = {"bookabstract": bookabstract, "bookid": bookid}
+            result = es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body)
+            eid = result['_id']
+
+            return jsonify({'code': 1, 'message': '新增大纲成功', "eid": eid})
+        else:
+            return jsonify({'code': 0, 'message': '大纲已存在'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '新增失败'})
+
+
+@app.route('/api/info/edit', methods=['POST'])
+@allow_cross_domain
+def info_edit():
+    """
+    更新ElasticSearch大纲信息
+    :return:
+    """
+    if not request.json or not 'bookid' in request.json or not 'eid' in request.json:
+        abort(400)
+    try:
+        bookabstract = request.get_json().get('bookabstract')
+        bookid = request.get_json().get('bookid')
+        eid = request.get_json().get('eid')
+
+        body = {"bookabstract": bookabstract, "bookid": bookid}
+        es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body, id=eid)
+
+        # 先删除
+        cypher = "start n=node(*) match p=(n)-[*0..3]->(b) where n.eid = \'" + eid + "\'  or b.eid = \'" + eid + "\'  delete  p "
+        character_graph.run(cypher)
+
+        return jsonify({'code': 1, 'message': '修改成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '修改失败'})
+
+
+@app.route('/api/info/detail', methods=['POST'])
+@allow_cross_domain
+def get_info_detail_by_eid():
+    """
+    通过eid查询大纲信息
+    """
+    if not request.json or not 'eid' in request.json:
+        abort(400)
+
+    eid = request.get_json().get('eid')
+    body = {"query": {"term": {"_id": eid}}}
+    all_doc = es.search(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body)
+    return jsonify(all_doc['hits']['hits'][0].get('_source'))
+
+
 @app.route('/api/info/query', methods=['POST'])
 @allow_cross_domain
 def info_query():
     """
-    获取ElasticSearch章节列表信息
+    通过bookid获取ElasticSearch故事大纲信息
     :return:
     """
     if not request.json or not 'bookid' in request.json:
@@ -723,7 +832,7 @@ def info_query():
 @allow_cross_domain
 def info_delete():
     """
-    删除ElasticSearch章节信息
+    删除ElasticSearch大纲信息
     :return:
     """
     if not request.json or not 'eid' in request.json:
@@ -737,22 +846,7 @@ def info_delete():
         return jsonify({'code': 0, 'message': '删除失败'})
 
 
-@app.route('/api/info/detail', methods=['POST'])
-@allow_cross_domain
-def get_info_detail_by_eid():
-    """
-    通过eid查询章节信息
-    """
-    if not request.json or not 'eid' in request.json:
-        abort(400)
-
-    eid = request.get_json().get('eid')
-    body = {"query": {"term": {"_id": eid}}}
-    all_doc = es.search(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body)
-    return jsonify(all_doc['hits']['hits'][0].get('_source'))
-
-
-"""  ========================================总体信息管理 结束================================================== """
+"""  ========================================故事大纲管理 结束================================================== """
 
 """  ========================================知识图谱管理 开始================================================== """
 
