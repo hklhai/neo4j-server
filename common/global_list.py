@@ -5,12 +5,36 @@
 DEV_MODE = "FML"
 
 if DEV_MODE == "DEBUG":
-    SQLALCHEMY_DATABASE_URI = "mysql+pymysql://root:mysql@spark1/srwc"
+    SQLALCHEMY_DATABASE_URI = "mysql+pymysql://srwc:mysql@ubuntu1/srwc"
+    # ElasticSearch
+    HOST_PORT = 'ubuntu1:9200'
+
+    # Neo4j Knowledge Graph
+    NEO4J_HOST = "ubuntu1"
+    NEO4J_HTTP_PORT = 7474
+    NEO4J_USER = "neo4j"
+    NEO4J_PASSWORD = "srwc"
+
+    # Neo4j Character Setting
+    CHARACTER_NEO4J_HOST = "ubuntu3"
+    CHARACTER_NEO4J_HTTP_PORT = 7474
+    CHARACTER_NEO4J_USER = "neo4j"
+    CHARACTER_NEO4J_PASSWORD = "srwc"
 else:
     SQLALCHEMY_DATABASE_URI = "mysql+pymysql://srwc:mysql@localhost/srwc"
+    # ElasticSearch
+    HOST_PORT = 'spark3:9200'
+    # Neo4j Knowledge Graph
+    NEO4J_HOST = "spark1"
+    NEO4J_HTTP_PORT = 7474
+    NEO4J_USER = "neo4j"
+    NEO4J_PASSWORD = "srwc"
 
-# ElasticSearch
-HOST_PORT = 'spark3:9200'
+    # Neo4j Character Setting
+    CHARACTER_NEO4J_HOST = "spark3"
+    CHARACTER_NEO4J_HTTP_PORT = 7474
+    CHARACTER_NEO4J_USER = "neo4j"
+    CHARACTER_NEO4J_PASSWORD = "srwc"
 
 # ElasticSearch index
 NEWS_INDEX = "news_data"
@@ -24,16 +48,3 @@ BOOK_TYPE = "book"
 
 SEARCH_TEXT_INDEX = "search_text"
 SEARCH_TEXT_TYPE = "text"
-
-# Neo4j Knowledge Graph
-# NEO4J_HOST = "127.0.0.1"
-NEO4J_HOST = "spark1"
-NEO4J_HTTP_PORT = 7474
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "srwc"
-
-# Neo4j Character Setting
-CHARACTER_NEO4J_HOST = "spark3"
-CHARACTER_NEO4J_HTTP_PORT = 7474
-CHARACTER_NEO4J_USER = "neo4j"
-CHARACTER_NEO4J_PASSWORD = "srwc"

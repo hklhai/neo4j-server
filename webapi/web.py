@@ -777,7 +777,7 @@ def search_list():
 
         query = {'query': {'match': {'search_text': search_text}}, "from": page_index, "size": page_size,
                  "highlight": {"fields": {"search_text": {}}}}
-        query_total = {'query': {'term': {'search_text': search_text}}}
+        query_total = {'query': {'match': {'search_text': search_text}}}
         all_doc = es.search(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query)
         total = es.count(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query_total)
         return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
