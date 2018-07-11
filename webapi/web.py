@@ -17,12 +17,13 @@ from flask_login import LoginManager
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 from py2neo import Graph, Node, Relationship, NodeSelector
+from werkzeug.contrib.fixers import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 sys.path.append(os.path.dirname(os.getcwd()))
 
 from common.global_list import *
-from webapi.webapimodels import new_alchemy_encoder, Work
+from webapi.webapimodels import new_alchemy_encoder, Work, Book, User, VBook
 
 app = Flask(__name__)
 
@@ -79,8 +80,9 @@ def allow_cross_domain(fun):
 @login_manger.user_loader
 @allow_cross_domain
 def load_user(user_id):
-    from app.model import User
-    return User.query.get(int(user_id))
+    # from app.model import User
+    # return User.query.get(int(user_id))
+    return db.session.query(User).get(int(user_id))
 
 
 @app.route('/', methods=['GET'])
@@ -131,7 +133,6 @@ def login():
         abort(400)
     username = request.get_json().get('username')
     password = request.get_json().get('password')
-    from webapi.webapimodels import User
     u_username = db.session.query(User).filter_by(username=username).first()
     u_phonenumber = db.session.query(User).filter_by(phonenumber=username).first()
     db.session.close()
@@ -149,7 +150,6 @@ def login():
 def work_detail():
     """
     查询工作信息
-    :return:
     """
     if not request.json or 'userid' not in request.json:
         abort(400)
@@ -179,7 +179,6 @@ def register():
     phonenumber = request.get_json().get('phonenumber')
     sex = request.get_json().get('sex')
 
-    from webapi.webapimodels import User
     if username == "":
         username = str(phonenumber)
         user = db.session.query(User).filter_by(phonenumber=phonenumber).first()
@@ -230,7 +229,6 @@ def add_book():
     abstract = request.get_json().get('abstract')
     writing = request.get_json().get('writing')
 
-    from webapi.webapimodels import Book
     book = db.session.query(Book).filter_by(bookname=bookname).first()
     if book is not None:
         return jsonify({'code': 0, 'message': '本小说已存在，请确认后新建！'})
@@ -266,7 +264,6 @@ def book_list():
     page_index = request.get_json().get('page_index')
     page_size = request.get_json().get('page_size')
 
-    from webapi.webapimodels import VBook
     books = db.session.query(VBook).filter_by(userid=userid, booklabel=0).order_by(VBook.bookid).limit(
         page_size).offset((page_index - 1) * page_size).all()
     total = db.session.query(VBook).filter_by(userid=userid, booklabel=0).count()
@@ -298,7 +295,6 @@ def book_edit():
     abstract = request.get_json().get('abstract')
     writing = request.get_json().get('writing')
 
-    from webapi.webapimodels import Book
     book = db.session.query(Book).filter_by(bookid=bookid).first()
     if book is not None:
         book.bookname = bookname
@@ -328,7 +324,6 @@ def book_logic_delete():
     if not request.json or 'bookid' not in request.json:
         abort(400)
     bookid = request.get_json().get('bookid')
-    from webapi.webapimodels import Book
     book = db.session.query(Book).filter_by(bookid=bookid).first()
     if book is not None:
         book.booklabel = 1
@@ -352,7 +347,6 @@ def book_complete_delete():
     if not request.json or 'bookid' not in request.json:
         abort(400)
     bookid = request.get_json().get('bookid')
-    from webapi.webapimodels import Book
     book = db.session.query(Book).filter_by(bookid=bookid).first()
     if book is not None:
         db.session.delete(book)
@@ -374,7 +368,6 @@ def book_detail():
     if not request.json or 'bookid' not in request.json:
         abort(400)
     bookid = request.get_json().get('bookid')
-    from webapi.webapimodels import Book
     book = Book.query.filter_by(bookid=bookid, booklabel=0).first()
     b = json.loads(json.dumps(book, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
     db.session.close()
@@ -493,13 +486,15 @@ def chapter_list():
     page_index = request.get_json().get('page_index') - 1
     page_size = request.get_json().get('page_size')
 
+    book = db.session.query(Book).filter_by(bookid=bookid).first()
+
     try:
         query = {'query': {'term': {'bookid': bookid}}, "sort": [{"chapternumber": {"order": "asc"}}],
                  "from": page_index, "size": page_size}
         query_total = {'query': {'term': {'bookid': bookid}}}
         all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query)
         total = es.count(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query_total)
-        return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
+        return jsonify({"data": all_doc['hits']['hits'], "total": total['count'], "description": book.abstract})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '查询失败'})
@@ -922,7 +917,7 @@ def graph_search():
 @allow_cross_domain
 def char_graph_search():
     """
-    :return:
+    人物设定查询数据接口
     """
     if not request.json or 'eid' not in request.json:
         abort(400)
@@ -956,10 +951,44 @@ def char_graph_search():
 
 """  ========================================人物设定管理 结束================================================== """
 
+"""  ========================================人工智能模拟 开始================================================== """
+
+
+@app.route('/api/ai', methods=['POST'])
+@allow_cross_domain
+def ai():
+    """
+    {
+        "guideTopic": "你最近身体如何",
+        "topicTraction": ["那你要赶紧去好好查查", "那你要赶紧去好好查查"],
+        "innovation": 1,
+        "lineNum": 100,
+        "model": [
+            "A", "B"
+        ]
+    }
+    """
+    if not request.json or 'model' not in request.json:
+        abort(400)
+    model = request.get_json().get('model')
+    guide_topic = request.get_json().get('guideTopic')
+    topic_traction = request.get_json().get('topicTraction')
+    innovation = request.get_json().get('innovation')
+    line_num = request.get_json().get('lineNum')
+    print(model)
+    print(guide_topic)
+    print(topic_traction)
+    print(innovation)
+    print(line_num)
+    return jsonify({"text": "生成文本"})
+
+
+"""  ========================================人工智能模拟 结束================================================== """
+
 
 @app.errorhandler(404)
 @allow_cross_domain
-def not_found(error):
+def not_found():
     """
     404 response
     :param error:
@@ -971,7 +1000,5 @@ if __name__ == '__main__':
     if DEV_MODE == "DEBUG":
         app.run(host="0.0.0.0", port=8888, debug=True)
     else:
-        from werkzeug.contrib.fixers import ProxyFix
-
         app.wsgi_app = ProxyFix(app.wsgi_app)
         app.run()
