@@ -98,7 +98,7 @@ def work_save():
     """
     保存工作区信息，存在userid更新保存，不存爱userid新增保存
     """""
-    if not request.json or not 'userid' in request.json or not "eid" in request.json:
+    if not request.json or 'userid' not in request.json or "eid" not in request.json:
         abort(400)
     eid = request.get_json().get('eid')
     userid = request.get_json().get('userid')
@@ -127,7 +127,7 @@ def login():
     """
     登录
     """
-    if not request.json or not 'username' in request.json or not "password" in request.json:
+    if not request.json or 'username' not in request.json or "password" not in request.json:
         abort(400)
     username = request.get_json().get('username')
     password = request.get_json().get('password')
@@ -151,7 +151,7 @@ def work_detail():
     查询工作信息
     :return:
     """
-    if not request.json or not 'userid' in request.json:
+    if not request.json or 'userid' not in request.json:
         abort(400)
     userid = request.get_json().get('userid')
     work = db.session.query(Work).filter_by(userid=userid, dellabel=0).first()
@@ -171,7 +171,8 @@ def register():
     """
     注册
     """
-    if not request.json or not 'username' in request.json or not 'phonenumber' in request.json or not 'sex' in request.json:
+    if not request.json or 'username' not in request.json or 'phonenumber' not in request.json or \
+            'sex' not in request.json:
         abort(400)
 
     username = request.get_json().get('username')
@@ -220,7 +221,7 @@ def add_book():
     新建小说
     :return: 新建成功 | 已经存在
     """
-    if not request.json or not 'userid' in request.json or not 'bookname' in request.json or not 'category' in request.json or not 'label' in request.json or not 'abstract' in request.json or not 'writing' in request.json:
+    if not request.json or 'userid' not in request.json or 'bookname' not in request.json or 'category' not in request.json or 'label' not in request.json or 'abstract' not in request.json or 'writing' not in request.json:
         abort(400)
 
     bookname = request.get_json().get('bookname')
@@ -259,7 +260,7 @@ def book_list():
     获取当前用户图书列表
     :return: 当前用户图书列表
     """
-    if not request.json or not 'userid' in request.json:
+    if not request.json or 'userid' not in request.json:
         abort(400)
     userid = request.get_json().get('userid')
     page_index = request.get_json().get('page_index')
@@ -286,7 +287,8 @@ def book_edit():
     更新图书信息
     :return: 当前用户图书列表
     """
-    if not request.json or not 'bookid' in request.json or not 'category' in request.json or not 'label' in request.json or not 'abstract' in request.json or not 'writing' in request.json:
+    if not request.json or 'bookid' not in request.json or 'category' not in request.json or \
+            'label' not in request.json or 'abstract' not in request.json or 'writing' not in request.json:
         abort(400)
     bookid = request.get_json().get('bookid')
     bookname = request.get_json().get('bookname')
@@ -323,7 +325,7 @@ def book_logic_delete():
     逻辑删除图书信息
     :return:
     """
-    if not request.json or not 'bookid' in request.json:
+    if not request.json or 'bookid' not in request.json:
         abort(400)
     bookid = request.get_json().get('bookid')
     from webapi.webapimodels import Book
@@ -347,7 +349,7 @@ def book_complete_delete():
     完全删除图书信息
     :return:
     """
-    if not request.json or not 'bookid' in request.json:
+    if not request.json or 'bookid' not in request.json:
         abort(400)
     bookid = request.get_json().get('bookid')
     from webapi.webapimodels import Book
@@ -369,7 +371,7 @@ def book_detail():
     获取图书信息
     :return: 图书详细信息
     """
-    if not request.json or not 'bookid' in request.json:
+    if not request.json or 'bookid' not in request.json:
         abort(400)
     bookid = request.get_json().get('bookid')
     from webapi.webapimodels import Book
@@ -389,7 +391,7 @@ def get_detail_by_eid():
     通过eid查询新闻详细信息
     :return:
     """
-    if not request.json or not 'eid' in request.json:
+    if not request.json or 'eid' not in request.json:
         abort(400)
 
     eid = request.get_json().get('eid')
@@ -408,7 +410,7 @@ def chapter_add():
     持久化章节信息至elasticsearch
     :return:
     """
-    if not request.json or not 'bookid' in request.json:
+    if not request.json or 'bookid' not in request.json:
         abort(400)
     try:
         chaptername = request.get_json().get('chaptername')
@@ -442,7 +444,7 @@ def chapter_edit():
     更新ElasticSearch章节信息
     :return:
     """
-    if not request.json or not 'bookid' in request.json or not 'eid' in request.json:
+    if not request.json or 'bookid' not in request.json or 'eid' not in request.json:
         abort(400)
     try:
         chaptername = request.get_json().get('chaptername')
@@ -484,7 +486,7 @@ def chapter_list():
     获取ElasticSearch章节列表信息
     :return:
     """
-    if not request.json or not 'bookid' in request.json:
+    if not request.json or 'bookid' not in request.json:
         abort(400)
 
     bookid = request.get_json().get('bookid')
@@ -510,7 +512,7 @@ def chapter_delete():
     删除ElasticSearch章节信息
     :return:
     """
-    if not request.json or not 'eid' in request.json:
+    if not request.json or 'eid' not in request.json:
         abort(400)
     try:
         eid = request.get_json().get('eid')
@@ -527,7 +529,7 @@ def get_chapter_detail_by_eid():
     """
     通过eid查询章节详细信息
     """
-    if not request.json or not 'eid' in request.json:
+    if not request.json or 'eid' not in request.json:
         abort(400)
 
     eid = request.get_json().get('eid')
@@ -543,7 +545,7 @@ def chapter_count():
     ElasticSearch章节数量
     :return: ElasticSearch章节数量+1
     """
-    if not request.json or not 'bookid' in request.json:
+    if not request.json or 'bookid' not in request.json:
         abort(400)
     try:
         bookid = request.get_json().get('bookid')
@@ -567,7 +569,7 @@ def character_add():
     持久化人物设定信息至elasticsearch
     :return:
     """
-    if not request.json or not 'bookid' in request.json:
+    if not request.json or 'bookid' not in request.json:
         abort(400)
     try:
         bookid = request.get_json().get('bookid')
@@ -601,7 +603,7 @@ def character_edit():
     更新ElasticSearch人物设定信息
     :return:
     """
-    if not request.json or not 'bookid' in request.json or not 'eid' in request.json:
+    if not request.json or 'bookid' not in request.json or 'eid' not in request.json:
         abort(400)
     try:
         charactersetting = request.get_json().get('charactersetting')
@@ -634,7 +636,7 @@ def character_query():
     通过bookid获取ElasticSearch人物设定信息
     :return:
     """
-    if not request.json or not 'bookid' in request.json:
+    if not request.json or 'bookid' not in request.json:
         abort(400)
     try:
         bookid = request.get_json().get('bookid')
@@ -653,7 +655,7 @@ def character_delete():
     删除ElasticSearch人物设定信息
     :return:
     """
-    if not request.json or not 'eid' in request.json:
+    if not request.json or 'eid' not in request.json:
         abort(400)
     try:
         eid = request.get_json().get('eid')
@@ -746,7 +748,7 @@ def info_add():
     持久化大纲信息至elasticsearch
     :return:
     """
-    if not request.json or not 'bookid' in request.json:
+    if not request.json or 'bookid' not in request.json:
         abort(400)
     try:
         bookid = request.get_json().get('bookid')
@@ -774,7 +776,7 @@ def info_edit():
     更新ElasticSearch大纲信息
     :return:
     """
-    if not request.json or not 'bookid' in request.json or not 'eid' in request.json:
+    if not request.json or 'bookid' not in request.json or 'eid' not in request.json:
         abort(400)
     try:
         bookabstract = request.get_json().get('bookabstract')
@@ -800,7 +802,7 @@ def get_info_detail_by_eid():
     """
     通过eid查询大纲信息
     """
-    if not request.json or not 'eid' in request.json:
+    if not request.json or 'eid' not in request.json:
         abort(400)
 
     eid = request.get_json().get('eid')
@@ -816,7 +818,7 @@ def info_query():
     通过bookid获取ElasticSearch故事大纲信息
     :return:
     """
-    if not request.json or not 'bookid' in request.json:
+    if not request.json or 'bookid' not in request.json:
         abort(400)
     try:
         bookid = request.get_json().get('bookid')
@@ -835,7 +837,7 @@ def info_delete():
     删除ElasticSearch大纲信息
     :return:
     """
-    if not request.json or not 'eid' in request.json:
+    if not request.json or 'eid' not in request.json:
         abort(400)
     try:
         eid = request.get_json().get('eid')
@@ -858,7 +860,7 @@ def search_list():
     查询命名体识别信息
     :return:
     """
-    if not request.json or not 'search_text' in request.json:
+    if not request.json or 'search_text' not in request.json:
         abort(400)
 
     search_text = request.get_json().get('search_text')
@@ -888,7 +890,7 @@ def graph_search():
     START x=node(*) MATCH (x)-[*0..3]-(y) where x.name='AI' RETURN x,y
     :return:
     """
-    if not request.json or not 'search_text' in request.json or not 'eid' in request.json:
+    if not request.json or 'search_text' not in request.json or 'eid' not in request.json:
         abort(400)
     search_text = request.get_json().get('search_text')
     eid = request.get_json().get('eid')
@@ -922,7 +924,7 @@ def char_graph_search():
     """
     :return:
     """
-    if not request.json or not 'eid' in request.json:
+    if not request.json or 'eid' not in request.json:
         abort(400)
     eid = request.get_json().get('eid')
     x = character_graph.run(
@@ -961,7 +963,6 @@ def not_found(error):
     """
     404 response
     :param error:
-    :return:
     """
     return make_response(jsonify({'error': 'Not found'}), 404)
 
