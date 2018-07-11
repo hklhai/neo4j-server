@@ -6,7 +6,7 @@ from py2neo import Graph, Relationship, NodeSelector, Node
 from common.global_list import *
 
 json_text = """
-{"people":[{"name":"孙悟空","relationship":[{"realtion":"师傅","being":"唐僧"},{"realtion":"徒弟","being":"猪八戒"},{"realtion":"师弟","being":"沙和尚"}],"characters":"活泼开朗","titles":"大师兄"},{"name":"唐僧","relationship":[{"realtion":"徒弟","being":"孙悟空"},{"realtion":"徒弟","being":"猪八戒"},{"realtion":"徒弟","being":"沙和尚"}],"characters":"老实","titles":"师傅"},{"name":"猪八戒","relationship":[{"realtion":"师傅","being":"唐僧"},{"realtion":"师兄","being":"孙悟空"},{"realtion":"师弟","being":"沙和尚"}],"characters":"贪吃","titles":"徒弟"},{"name":"沙和尚","relationship":[{"realtion":"师傅","being":"唐僧"},{"realtion":"大师兄","being":"孙悟空"},{"realtion":"二师兄","being":"猪八戒"}],"characters":"老实","titles":"徒弟"}]}
+{"people":[{"name":"乔峰","relationship":[{"realtion":"父亲","being":"萧远山"},{"realtion":"妻子","being":"阿朱"},{"realtion":"二弟","being":"虚竹"},{"realtion":"三弟","being":"段誉"}],"characters":"豪爽","titles":"大英雄"},{"name":"萧远山","relationship":[{"realtion":"儿子","being":"乔峰"}],"characters":"心狠手辣","titles":"大恶人"},{"name":"段誉","relationship":[{"realtion":"大哥","being":"乔峰"},{"realtion":"妻子","being":"王语嫣"}],"characters":"多情","titles":"大理王子"},{"name":"虚竹","relationship":[{"realtion":"大哥","being":"乔峰"}],"characters":"木讷","titles":"灵鹫宫主人"},{"name":"阿朱","relationship":[{"realtion":"丈夫","being":"乔峰"},{"realtion":"妹妹","being":"王语嫣"}],"characters":"开朗","titles":"丫鬟"}]}
 """
 setting = json.loads(json_text)
 peoples = setting['people']
@@ -81,6 +81,7 @@ for j in range(len(peoples)):
         characters = peoples[j]['characters'].split(",")
         for i in range(len(characters)):
             node['character'] = characters[i]
+        character_graph.push(node)
 
         relationship = peoples[j]['relationship']
         for relation in relationship:

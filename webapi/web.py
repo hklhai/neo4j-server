@@ -710,6 +710,7 @@ def extract_realtion_persist_to_neo4j(eid, peoples, selector):
             characters = peoples[j]['characters'].split(",")
             for i in range(len(characters)):
                 node['character'] = characters[i]
+            character_graph.push(node)
 
             relationship = peoples[j]['relationship']
             for relation in relationship:
