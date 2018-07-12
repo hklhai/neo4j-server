@@ -19,6 +19,9 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(200), default="")
     phonenumber = db.Column(db.BIGINT)
     sex = db.Column(db.String(2))
+    name = db.Column(db.String(60))
+    address = db.Column(db.String(120))
+    idcard = db.Column(db.String(18))
 
     def get_id(self):
         return self.uid
@@ -114,7 +117,7 @@ def new_alchemy_encoder():
                 # an SQLAlchemy class
                 fields = {}
                 for field in [x for x in dir(obj) if
-                              not x.startswith('_') and not x.startswith("is_") and
+                              not x.startswith('_') and not x.startswith("is_") and not x.startswith("passwor") and
                               not x.startswith("get_") and not x.startswith("query") and x != 'metadata']:
                     data = obj.__getattribute__(field)
                     try:

@@ -91,7 +91,7 @@ def index():
     return jsonify({'code': 1, 'message': 'SRWC-Server Started'})
 
 
-"""  ========================================登录注册管理 结束================================================== """
+"""  ========================================用户信息管理 开始================================================== """
 
 
 @app.route('/api/work/save', methods=['POST'])
@@ -133,12 +133,10 @@ def login():
         abort(400)
     username = request.get_json().get('username')
     password = request.get_json().get('password')
-    u_username = db.session.query(User).filter_by(username=username).first()
     u_phonenumber = db.session.query(User).filter_by(phonenumber=username).first()
     db.session.close()
-    if u_username is not None and check_password_hash(u_username.password, password):
-        return jsonify({'code': 1, 'message': '成功登录', 'username': u_username.username, 'userid': u_username.uid})
-    elif u_phonenumber is not None and check_password_hash(u_phonenumber.password, password):
+
+    if u_phonenumber is not None and check_password_hash(u_phonenumber.password, password):
         return jsonify({'code': 1, 'message': '成功登录', 'username': u_phonenumber.username, 'userid': u_phonenumber.uid})
     else:
         flash('用户或密码错误')
@@ -208,7 +206,82 @@ def register():
     return jsonify({'code': 1, 'message': '注册成功'})
 
 
-"""  ========================================登录注册管理 结束================================================== """
+@app.route('/api/user/detail', methods=['POST'])
+@allow_cross_domain
+def user_detail():
+    """
+    用户信息获取
+    """
+    if not request.json or 'userid' not in request.json:
+        abort(400)
+    userid = request.get_json().get('userid')
+    user = db.session.query(User).filter_by(uid=userid).first()
+    u = json.loads(json.dumps(user, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
+    db.session.close()
+    return jsonify({'user': u})
+
+
+@app.route('/api/user/edit', methods=['POST'])
+@allow_cross_domain
+def user_edit():
+    """
+    用户信息修改
+    """
+    if not request.json or 'userid' not in request.json:
+        abort(400)
+    userid = request.get_json().get('userid')
+    username = request.get_json().get('username')
+    phonenumber = request.get_json().get('phonenumber')
+    sex = request.get_json().get('sex')
+    name = request.get_json().get('name')
+    address = request.get_json().get('address')
+    idcard = request.get_json().get('idcard')
+
+    # 查询用户名是否重名
+    user_username = db.session.query(User).filter_by(username=username).first()
+    if user_username is not None:
+        return jsonify({'code': 0, 'message': '该用户名已存在，请确认后新建！'})
+
+    user = db.session.query(User).filter_by(uid=userid).first()
+    user.username = username
+    user.phonenumber = phonenumber
+    user.sex = sex
+    user.name = name
+    user.address = address
+    user.idcard = idcard
+
+    db.session.merge(user)
+    db.session.flush()
+    db.session.commit()
+    db.session.close()
+    return jsonify({'code': 1, 'message': '修改用户信息成功'})
+
+
+@app.route('/api/user/modifyPassword', methods=['POST'])
+@allow_cross_domain
+def user_modify_password():
+    if not request.json or 'username' not in request.json or "password" not in request.json \
+            or "newpassword" not in request.json:
+        abort(400)
+    username = request.get_json().get('username')
+    password = request.get_json().get('password')
+    newpassword = request.get_json().get('newpassword')
+    u_phonenumber = db.session.query(User).filter_by(phonenumber=username).first()
+
+    if u_phonenumber is not None and check_password_hash(u_phonenumber.password, password):
+        u_phonenumber.password = generate_password_hash(newpassword)
+        db.session.merge(u_phonenumber)
+        db.session.flush()
+        db.session.commit()
+        db.session.close()
+        return jsonify(
+            {'code': 1, 'message': '密码修改成功', 'username': u_phonenumber.username, 'userid': u_phonenumber.uid})
+    else:
+        flash('用户或密码错误')
+        return jsonify({'code': 0, 'message': '原密码错误！'})
+
+
+"""  ========================================用户信息管理 结束================================================== """
 
 """  ========================================小说信息管理 开始================================================== """
 
@@ -220,7 +293,9 @@ def add_book():
     新建小说
     :return: 新建成功 | 已经存在
     """
-    if not request.json or 'userid' not in request.json or 'bookname' not in request.json or 'category' not in request.json or 'label' not in request.json or 'abstract' not in request.json or 'writing' not in request.json:
+    if not request.json or 'userid' not in request.json or 'bookname' not in request.json or \
+            'category' not in request.json or 'label' not in request.json or 'abstract' not in request.json or \
+            'writing' not in request.json:
         abort(400)
 
     bookname = request.get_json().get('bookname')
@@ -609,7 +684,8 @@ def character_edit():
         es.index(index=CHARACTER_INDEX, doc_type=CHARACTER_TYPE, body=body, id=eid)
 
         # 先删除
-        cypher = "start n=node(*) match p=(n)-[*0..3]->(b) where n.eid = \'" + eid + "\'  or b.eid = \'" + eid + "\'  delete  p "
+        cypher = "start n=node(*) match p=(n)-[*0..3]->(b) where n.eid = \'" + eid + "\'  or b.eid = \'" \
+                 + eid + "\'  delete  p "
         character_graph.run(cypher)
 
         # 保存信息至Neo4J
@@ -783,7 +859,8 @@ def info_edit():
         es.index(index=BOOK_INDEX, doc_type=BOOK_TYPE, body=body, id=eid)
 
         # 先删除
-        cypher = "start n=node(*) match p=(n)-[*0..3]->(b) where n.eid = \'" + eid + "\'  or b.eid = \'" + eid + "\'  delete  p "
+        cypher = "start n=node(*) match p=(n)-[*0..3]->(b) where n.eid = \'" + eid + "\'  or b.eid = \'" \
+                 + eid + "\'  delete  p "
         character_graph.run(cypher)
 
         return jsonify({'code': 1, 'message': '修改成功'})
@@ -891,7 +968,8 @@ def graph_search():
     search_text = request.get_json().get('search_text')
     eid = request.get_json().get('eid')
 
-    cypher = "START x=node(*) MATCH (x)<-[r]-(y) where x.name=\'" + search_text + "\' and  x.eid=\'" + eid + "\' RETURN y"
+    cypher = "START x=node(*) MATCH (x)<-[r]-(y) where x.name=\'" + search_text + "\' and  x.eid=\'" \
+             + eid + "\' RETURN y"
     c = graph.run(cypher).data()
     if len(c) == 0:
         return jsonify({"nodes": [], "edges": []})
@@ -992,7 +1070,6 @@ def ai():
 def not_found():
     """
     404 response
-    :param error:
     """
     return make_response(jsonify({'error': 'Not found'}), 404)
 
