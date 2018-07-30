@@ -34,6 +34,7 @@ flask-cors = "*"
 gunicorn = "*"
 pycrypto = "*"
 pyexecjs = "*"
+jieba = "*"
 
 [dev-packages]
 

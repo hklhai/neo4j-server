@@ -7,6 +7,7 @@ from functools import wraps
 from itertools import groupby
 from operator import itemgetter
 
+import jieba.analyse
 from elasticsearch import Elasticsearch
 from flask import Flask, make_response
 from flask import abort
@@ -20,8 +21,6 @@ from flask_sqlalchemy import SQLAlchemy
 from py2neo import Graph, Node, Relationship, NodeSelector
 from werkzeug.contrib.fixers import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
-from binascii import b2a_hex, a2b_hex
-from Crypto.Cipher import DES
 
 sys.path.append(os.path.dirname(os.getcwd()))
 
@@ -1044,29 +1043,37 @@ def char_graph_search():
 @allow_cross_domain
 def ai():
     """
-    {
-        "guideTopic": "你最近身体如何",
-        "topicTraction": ["那你要赶紧去好好查查", "那你要赶紧去好好查查"],
-        "innovation": 1,
-        "lineNum": 100,
-        "model": [
-            "A", "B"
-        ]
-    }
+    根据章节信息返回主题；人物，性格
     """
-    if not request.json or 'model' not in request.json:
+    if not request.json or 'chapterabstract' not in request.json or 'bookid' not in request.json:
         abort(400)
-    model = request.get_json().get('model')
-    guide_topic = request.get_json().get('guideTopic')
-    topic_traction = request.get_json().get('topicTraction')
-    innovation = request.get_json().get('innovation')
-    line_num = request.get_json().get('lineNum')
-    print(model)
-    print(guide_topic)
-    print(topic_traction)
-    print(innovation)
-    print(line_num)
-    return jsonify({"text": "生成文本"})
+    chapterabstract = request.get_json().get('chapterabstract')
+    bookid = request.get_json().get('bookid')
+    # 查询人物设定，解析并返回
+    query = {'query': {'term': {'bookid': bookid}}}
+    all_doc = es.search(index=CHARACTER_INDEX, doc_type=CHARACTER_TYPE, body=query)
+    if len(all_doc['hits']['hits']) == 0:
+        return jsonify({'code': 0, 'message': '人物设定不存在'})
+    else:
+        setting = json.loads(all_doc['hits']['hits'][0]['_source']['charactersetting'])
+        peoples = setting['people']
+        list = []
+
+        for j in range(len(peoples)):
+            if peoples[j]['name'] in chapterabstract:
+                characters = peoples[j]['characters'].split(",")
+                people = {}
+                people['name'] = peoples[j]['name']
+                for i in range(len(characters)):
+                    people['characters'] = characters[i]
+                list.append(people)
+
+        keywords = jieba.analyse.extract_tags(chapterabstract, topK=5, withWeight=True, allowPOS=('n', 'nr', 'ns'))
+        tags = ""
+        for i in range(4):
+            tags += keywords[i][0] + ","
+        tag = tags[0:-1]
+        return jsonify({'code': 1, 'peoples': list, 'keywords': tag})
 
 
 """  ========================================人工智能模拟 结束================================================== """
