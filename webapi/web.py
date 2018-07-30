@@ -13,12 +13,15 @@ from flask import abort
 from flask import request, jsonify, flash
 from flask_bootstrap import Bootstrap
 from flask_cors import CORS
+from flask_httpauth import HTTPTokenAuth
 from flask_login import LoginManager
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 from py2neo import Graph, Node, Relationship, NodeSelector
 from werkzeug.contrib.fixers import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
+from binascii import b2a_hex, a2b_hex
+from Crypto.Cipher import DES
 
 sys.path.append(os.path.dirname(os.getcwd()))
 
@@ -26,6 +29,7 @@ from common.global_list import *
 from webapi.webapimodels import new_alchemy_encoder, Work, Book, User, VBook
 
 app = Flask(__name__)
+auth = HTTPTokenAuth(scheme='Bearer')
 
 # 配置flask配置对象中键：SQLALCHEMY_DATABASE_URI
 app.config.from_object('config')
@@ -260,6 +264,9 @@ def user_edit():
 @app.route('/api/user/modifyPassword', methods=['POST'])
 @allow_cross_domain
 def user_modify_password():
+    """
+    用户密码修改
+    """
     if not request.json or 'username' not in request.json or "password" not in request.json \
             or "newpassword" not in request.json:
         abort(400)

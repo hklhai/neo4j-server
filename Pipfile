@@ -32,6 +32,8 @@ jsonplus = "*"
 flask-restful = "*"
 flask-cors = "*"
 gunicorn = "*"
+pycrypto = "*"
+pyexecjs = "*"
 
 [dev-packages]
 
