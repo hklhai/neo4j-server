@@ -947,12 +947,11 @@ def search_list():
     page_size = request.get_json().get('page_size')
 
     try:
-        # query = {'query': {'term': {'search_text': search_text}}, "from": page_index, "size": page_size,
-        #          "highlight": {"fields": {"search_text": {}}}}
-
-        query = {'query': {'match': {'search_text': search_text}}, "from": page_index, "size": page_size,
+        # 短语搜索match_phrase https://blog.csdn.net/cc907566076/article/details/78553950
+        query = {'query': {'match_phrase': {'search_text': search_text}}, "from": page_index, "size": page_size,
                  "highlight": {"fields": {"search_text": {}}}}
-        query_total = {'query': {'match': {'search_text': search_text}}}
+        query_total = {'query': {'match_phrase': {'search_text': search_text}}}
+
         all_doc = es.search(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query)
         total = es.count(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query_total)
         return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
