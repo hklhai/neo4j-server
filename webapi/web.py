@@ -25,7 +25,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 sys.path.append(os.path.dirname(os.getcwd()))
 
 from common.global_list import *
-from webapi.webapimodels import new_alchemy_encoder, Work, Book, User, VBook
+from webapi.webapimodels import new_alchemy_encoder, Work, Book, User, VBook, Episode
 
 app = Flask(__name__)
 auth = HTTPTokenAuth(scheme='Bearer')
@@ -65,6 +65,9 @@ character_graph = Graph(
     user=CHARACTER_NEO4J_USER,
     password=CHARACTER_NEO4J_PASSWORD
 )
+
+category_dict = {"剧本": "scripts", "小说": "fiction", "电视剧": "soap opera"}
+status_dict = {"未完成": 0, "已完成": 1}
 
 
 def allow_cross_domain(fun):
@@ -294,7 +297,7 @@ def user_modify_password():
 
 @app.route('/api/addBook', methods=['POST'])
 @allow_cross_domain
-def add_book():
+def book_add():
     """
     新建小说
     :return: 新建成功 | 已经存在
@@ -371,7 +374,7 @@ def book_edit():
     bookid = request.get_json().get('bookid')
     bookname = request.get_json().get('bookname')
     bookstatus = request.get_json().get('bookstatus')
-    category = request.get_json().get('category')
+    category = category_dict[request.get_json().get('category')]
     label = request.get_json().get('label')
     abstract = request.get_json().get('abstract')
     writing = request.get_json().get('writing')
@@ -418,7 +421,7 @@ def book_logic_delete():
         return jsonify({'code': 0, 'message': '删除小说失败'})
 
 
-@app.route('/api/book/complet/edelete', methods=['POST'])
+@app.route('/api/book/complet/delete', methods=['POST'])
 @allow_cross_domain
 def book_complete_delete():
     """
@@ -449,7 +452,7 @@ def book_detail():
     if not request.json or 'bookid' not in request.json:
         abort(400)
     bookid = request.get_json().get('bookid')
-    book = Book.query.filter_by(bookid=bookid, booklabel=0).first()
+    book = db.session.query(Book).filter_by(bookid=bookid, booklabel=0).first()
     b = json.loads(json.dumps(book, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
     db.session.close()
     return jsonify({"books": b})
@@ -1035,7 +1038,7 @@ def char_graph_search():
 
 """  ========================================人物设定管理 结束================================================== """
 
-"""  ========================================人工智能模拟 开始================================================== """
+"""  ========================================人工智能调用 开始================================================== """
 
 
 @app.route('/api/ai', methods=['POST'])
@@ -1075,7 +1078,151 @@ def ai():
         return jsonify({'code': 1, 'peoples': list, 'keywords': tag})
 
 
-"""  ========================================人工智能模拟 结束================================================== """
+"""  ========================================人工智能调用 结束================================================== """
+
+"""  ========================================电视剧本管理 开始================================================== """
+
+
+@app.route('/api/episode/count', methods=['POST'])
+@allow_cross_domain
+def episode_count():
+    """
+    获取电视剧剧本集数量
+    :return: MySQL剧集数量+1
+    """
+    if not request.json or 'bookid' not in request.json:
+        abort(400)
+    try:
+        bookid = request.get_json().get('bookid')
+        count = db.session.query(Episode).filter_by(bookid=bookid).count()
+        return jsonify({'code': 1, 'next_episode': count + 1})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '获取失败'})
+
+
+@app.route('/api/episode/add', methods=['POST'])
+@allow_cross_domain
+def episode_add():
+    """
+    持久化电视剧集数至MySQL
+    """
+    if not request.json or 'bookid' not in request.json:
+        abort(400)
+    try:
+        episodename = request.get_json().get('episodename')
+        episodenumber = request.get_json().get('episodenumber')
+        bookid = request.get_json().get('bookid')
+        episode = Episode(
+            episodename=episodename,
+            episodenumber=episodenumber,
+            bookid=bookid
+        )
+        db.session.add(episode)
+        db.session.commit()
+        db.session.flush()
+        db.session.close()
+
+        return jsonify({'code': 1, 'message': '新增剧集成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '新增剧集失败'})
+
+
+@app.route('/api/episode/list', methods=['POST'])
+@allow_cross_domain
+def episode_list():
+    """
+    获取MySQL剧集列表信息
+    """
+    if not request.json or 'bookid' not in request.json:
+        abort(400)
+
+    bookid = request.get_json().get('bookid')
+    page_index = request.get_json().get('page_index')
+    page_size = request.get_json().get('page_size')
+
+    episodes = db.session.query(Episode).filter_by(bookid=bookid).order_by(Episode.episodenumber).limit(
+        page_size).offset((page_index - 1) * page_size).all()
+    total = db.session.query(Episode).filter_by(bookid=bookid).count()
+
+    lists = json.loads(json.dumps(episodes, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
+    db.session.close()
+    return jsonify({"episodes": lists, "total": total})
+
+
+@app.route('/api/episode/edit', methods=['POST'])
+@allow_cross_domain
+def episode_edit():
+    """
+    更新MySQL中剧集信息
+    """
+    if not request.json or 'episodename' not in request.json or 'episodenumber' not in request.json \
+            or 'episodeid' not in request.json:
+        abort(400)
+
+    episodeid = request.get_json().get('episodeid')
+    episodename = request.get_json().get('episodename')
+    episodenumber = request.get_json().get('episodenumber')
+
+    episode = db.session.query(Episode).filter_by(episodeid=episodeid).first()
+    if episode is not None:
+        episode.episodename = episodename
+        episode.episodenumber = episodenumber
+        db.session.merge(episode)
+        db.session.flush()
+        db.session.commit()
+        db.session.close()
+        return jsonify({'code': 1, 'message': '修改剧集成功'})
+    else:
+        db.session.close()
+        return jsonify({'code': 0, 'message': '修改剧集失败'})
+
+
+@app.route('/api/episode/delete', methods=['POST'])
+@allow_cross_domain
+def episode_delete():
+    """
+    删除MySQL剧集信息
+    :return:
+    """
+    if not request.json or 'episodeid' not in request.json:
+        abort(400)
+    episodeid = request.get_json().get('episodeid')
+    episode = db.session.query(Episode).filter_by(episodeid=episodeid).first()
+    if episode is not None:
+        db.session.delete(episode)
+        db.session.commit()
+        db.session.close()
+        return jsonify({'code': 1, 'message': '删除剧集成功'})
+    else:
+        db.session.close()
+        return jsonify({'code': 0, 'message': '删除剧集失败'})
+
+
+@app.route('/api/episode/detail', methods=['POST'])
+@allow_cross_domain
+def get_episode_detail_by_episodeid():
+    """
+    通过episodeid查询剧集详细信息
+    """
+    if not request.json or 'episodeid' not in request.json:
+        abort(400)
+    episodeid = request.get_json().get('episodeid')
+    episode = db.session.query(Episode).filter_by(episodeid=episodeid).first()
+    b = json.loads(json.dumps(episode, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
+    db.session.close()
+    return jsonify({"episode": b})
+
+
+"""  ========================================电视剧本管理 结束================================================== """
+
+"""  ========================================电视场次管理 开始================================================== """
+
+
+
+
+"""  ========================================电视场次管理 结束================================================== """
 
 
 @app.errorhandler(404)

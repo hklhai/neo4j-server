@@ -103,6 +103,20 @@ class Work(db.Model):
         return self.wid
 
 
+class Episode(db.Model):
+    """
+    Episode Mdoel 章节信息
+    """
+    __tablename__ = 'tb_episode'
+    episodeid = db.Column(db.Integer, autoincrement=True, primary_key=True)
+    episodename = db.Column(db.String(255), unique=True)
+    episodenumber = db.Column(db.Integer)
+    bookid = db.Column(db.Integer)
+
+    def get_id(self):
+        return self.wid
+
+
 def new_alchemy_encoder():
     _visited_objs = []
 
