@@ -48,3 +48,12 @@ CHARACTER_TYPE = "character"
 
 SEARCH_TEXT_INDEX = "search_text"
 SEARCH_TEXT_TYPE = "text"
+
+# 电视剧场次
+SCENE_INDEX = "scene_data"
+SCENE_TYPE = "scene"
+
+# ElasticSearch index
+COMMENT_INDEX = "news_comment"
+COMMENT_TYPE = "comment"
+

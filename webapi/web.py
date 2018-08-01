@@ -436,10 +436,10 @@ def book_complete_delete():
         db.session.delete(book)
         db.session.commit()
         db.session.close()
-        return jsonify({'code': 1, 'message': '删除小说成功'})
+        return jsonify({'code': 1, 'message': '完全删除小说成功'})
     else:
         db.session.close()
-        return jsonify({'code': 0, 'message': '删除小说失败'})
+        return jsonify({'code': 0, 'message': '完全删除小说失败'})
 
 
 @app.route('/api/detail', methods=['POST'])
@@ -630,8 +630,8 @@ def chapter_count():
     try:
         bookid = request.get_json().get('bookid')
         query = {'query': {'term': {'bookid': bookid}}}
-        all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query)
-        return jsonify({'code': 1, 'next_chapter': len(all_doc['hits']['hits']) + 1})
+        all_doc = es.count(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query)
+        return jsonify({'code': 1, 'next_chapter': all_doc['count'] + 1})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '获取失败'})
@@ -1219,6 +1219,39 @@ def get_episode_detail_by_episodeid():
 """  ========================================电视场次管理 开始================================================== """
 
 
+@app.route('/api/scene/count', methods=['POST'])
+@allow_cross_domain
+def scene_count():
+    """
+    ElasticSearch电视场数量
+    :return: ElasticSearch电视场数量+1
+    """
+    if not request.json or 'episodeid' not in request.json or 'bookid' not in request.json:
+        abort(400)
+    try:
+        episodeid = request.get_json().get('episodeid')
+        bookid = request.get_json().get('bookid')
+        # 不确定集数根据作品id查询
+        if episodeid == 0:
+            episode = db.session.query(Episode).filter_by(bookid=bookid).order_by(Episode.episodenumber.desc()).first()
+            if episode is not None:
+                # 存在去除最大集数
+                episodeid = episode.episodeid
+                query = {'query': {'term': {'episodeid': episodeid}}}
+                all_doc = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
+                return jsonify({'code': 1, 'next_scene': all_doc['count'] + 1})
+            else:
+                # 不存在为1
+                return jsonify({'code': 1, 'next_scene': 1})
+        else:
+            query = {'query': {'term': {'episodeid': episodeid}}}
+            all_doc = es.search(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
+            return jsonify({'code': 1, 'next_scene': len(all_doc['hits']['hits']) + 1})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '获取失败'})
+
+
 @app.route('/api/scene/add', methods=['POST'])
 @allow_cross_domain
 def scene_add():
@@ -1235,12 +1268,12 @@ def scene_add():
         charactersetting = request.get_json().get('charactersetting')
         scenenumber = request.get_json().get('scenenumber')
         bookname = request.get_json().get('bookname')
-        episodenumber = request.get_json().get('episodenumber')
+        episodeid = request.get_json().get('episodeid')
 
         create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        body = {"scenename": scenename, "scenecontent": scenecontent, "episodenumber": episodenumber,
+        body = {"scenename": scenename, "scenecontent": scenecontent, "episodeid": episodeid,
                 "bookid": bookid, "sceneversion": str(sceneversion), "charactersetting": str(charactersetting),
                 "create_date": create_date, "edit_date": edit_date, "scenenumber": scenenumber,
                 "bookname": bookname}
@@ -1252,23 +1285,33 @@ def scene_add():
         return jsonify({'code': 0, 'message': '新增失败'})
 
 
-@app.route('/api/scene/count', methods=['POST'])
+@app.route('/api/scene/list', methods=['POST'])
 @allow_cross_domain
-def scene_count():
+def scene_list():
     """
-    ElasticSearch电视场数量
-    :return: ElasticSearch电视场数量+1
+    获取ElasticSearch电视剧场次列表信息
+    :return:
     """
-    if not request.json or 'episodenumber' not in request.json:
+    if not request.json or 'bookid' not in request.json or 'episodeid' not in request.json:
         abort(400)
+
+    bookid = request.get_json().get('bookid')
+    episodeid = request.get_json().get('episodeid')
+    page_index = request.get_json().get('page_index') - 1
+    page_size = request.get_json().get('page_size')
+
+    book = db.session.query(Book).filter_by(bookid=bookid).first()
+
     try:
-        episodenumber = request.get_json().get('episodenumber')
-        query = {'query': {'term': {'episodenumber': episodenumber}}}
+        query = {'query': {'term': {'episodeid': episodeid}}, "sort": [{"scenenumber": {"order": "asc"}}],
+                 "from": page_index, "size": page_size}
+        query_total = {'query': {'term': {'episodeid': episodeid}}}
         all_doc = es.search(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
-        return jsonify({'code': 1, 'next_scene': len(all_doc['hits']['hits']) + 1})
+        total = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query_total)
+        return jsonify({"data": all_doc['hits']['hits'], "total": total['count'], "description": book.abstract})
     except Exception as err:
         print(err)
-        return jsonify({'code': 0, 'message': '获取失败'})
+        return jsonify({'code': 0, 'message': '查询失败'})
 
 
 @app.route('/api/scene/edit', methods=['POST'])
@@ -1292,7 +1335,7 @@ def scene_edit():
         scenenumber = request.get_json().get('scenenumber')
         bookname = request.get_json().get('bookname')
         # 由episode_list获取
-        episodenumber = request.get_json().get('episodenumber')
+        episodeid = request.get_json().get('episodeid')
 
         # 作品完稿不进入编辑页面
         if scenefinish == 1:
@@ -1305,7 +1348,7 @@ def scene_edit():
                 db.session.close()
 
         edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        body = {"scenename": scenename, "scenecontent": scenecontent, "episodenumber": episodenumber,
+        body = {"scenename": scenename, "scenecontent": scenecontent, "episodeid": episodeid,
                 "bookid": bookid, "create_date": create_date, "edit_date": edit_date, "scenenumber": scenenumber,
                 "charactersetting": str(charactersetting), "sceneversion": str(sceneversion), "bookname": bookname}
         es.index(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=body, id=eid)
@@ -1313,35 +1356,6 @@ def scene_edit():
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '修改失败'})
-
-
-@app.route('/api/scene/list', methods=['POST'])
-@allow_cross_domain
-def scene_list():
-    """
-    获取ElasticSearch电视剧场次列表信息
-    :return:
-    """
-    if not request.json or 'bookid' not in request.json or 'episodenumber' not in request.json:
-        abort(400)
-
-    bookid = request.get_json().get('bookid')
-    episodenumber = request.get_json().get('episodenumber')
-    page_index = request.get_json().get('page_index') - 1
-    page_size = request.get_json().get('page_size')
-
-    book = db.session.query(Book).filter_by(bookid=bookid).first()
-
-    try:
-        query = {'query': {'term': {'episodenumber': episodenumber}}, "sort": [{"scenenumber": {"order": "asc"}}],
-                 "from": page_index, "size": page_size}
-        query_total = {'query': {'term': {'episodenumber': episodenumber}}}
-        all_doc = es.search(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
-        total = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query_total)
-        return jsonify({"data": all_doc['hits']['hits'], "total": total['count'], "description": book.abstract})
-    except Exception as err:
-        print(err)
-        return jsonify({'code': 0, 'message': '查询失败'})
 
 
 @app.route('/api/scene/delete', methods=['POST'])
@@ -1363,6 +1377,32 @@ def scene_delete():
 
 
 """  ========================================电视场次管理 结束================================================== """
+
+"""  ========================================评论数据查询 开始================================================== """
+
+
+@app.route('/api/comment/search', methods=['POST'])
+@allow_cross_domain
+def comment_search():
+    if not request.json or 'word' not in request.json:
+        abort(400)
+
+    word = request.get_json().get('word')
+    page_index = request.get_json().get('page_index') - 1
+    page_size = request.get_json().get('page_size')
+    try:
+        query = {'query': {'match_phrase': {'content': word}}, "from": page_index, "size": page_size,
+                 "highlight": {"fields": {"content": {}}}}
+        query_total = {'query': {'match_phrase': {'content': word}}}
+        all_doc = es.search(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query)
+        total = es.count(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query_total)
+        return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '查询失败'})
+
+
+"""  ========================================评论数据查询 结束================================================== """
 
 
 @app.errorhandler(404)
