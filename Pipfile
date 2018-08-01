@@ -32,7 +32,7 @@ jsonplus = "*"
 flask-restful = "*"
 flask-cors = "*"
 gunicorn = "*"
-pycrypto = "*"
+pycrypto = "==2.6.1"
 pyexecjs = "*"
 jieba = "*"
 

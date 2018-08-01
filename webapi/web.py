@@ -18,7 +18,7 @@ from flask_httpauth import HTTPTokenAuth
 from flask_login import LoginManager
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
-from py2neo import Graph, Node, Relationship, NodeSelector
+from py2neo import Graph, Node, Relationship, NodeMatcher
 from werkzeug.contrib.fixers import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -536,6 +536,7 @@ def chapter_edit():
         chapternumber = request.get_json().get('chapternumber')
         bookname = request.get_json().get('bookname')
 
+        # 作品完稿不进入编辑页面
         if chapterfinish == 1:
             work = db.session.query(Work).filter_by(eid=eid, dellabel=0).first()
             if work is not None:
@@ -665,8 +666,8 @@ def character_add():
             peoples = setting['people']
             # 保存信息至Neo4J
             if not len(peoples) == 0:
-                selector = NodeSelector(character_graph)
-                extract_realtion_persist_to_neo4j(eid, peoples, selector)
+                matcher = NodeMatcher(character_graph)
+                extract_realtion_persist_to_neo4j(eid, peoples, matcher)
             return jsonify({'code': 1, 'message': '新增成功', "eid": eid})
         else:
             return jsonify({'code': 0, 'message': '人物设定已存在'})
@@ -701,8 +702,8 @@ def character_edit():
         setting = json.loads(str(charactersetting))
         peoples = setting['people']
         if not len(peoples) == 0:
-            selector = NodeSelector(character_graph)
-            extract_realtion_persist_to_neo4j(eid, peoples, selector)
+            matcher = NodeMatcher(character_graph)
+            extract_realtion_persist_to_neo4j(eid, peoples, matcher)
         return jsonify({'code': 1, 'message': '修改成功'})
     except Exception as err:
         print(err)
@@ -746,17 +747,17 @@ def character_delete():
         return jsonify({'code': 0, 'message': '删除失败'})
 
 
-def extract_realtion_persist_to_neo4j(eid, peoples, selector):
+def extract_realtion_persist_to_neo4j(eid, peoples, matcher):
     """
     抽取json关系持久化至Neo4j
 
     :param eid: 保存小说整体信息eid
     :param peoples: 人物设定json
-    :param selector:  neo4j selector
+    :param matcher:  neo4j matcher
     """
     for j in range(len(peoples)):
         node_name = peoples[j]['name']
-        node_list = selector.select("Person", name=node_name, eid=eid)
+        node_list = matcher.match("Person", name=node_name, eid=eid)
         if len(list(node_list)) == 0:
             node = Node("Person", name=node_name, eid=eid, image="PERSON.PNG")
             titles = peoples[j]['titles'].split(",")
@@ -772,9 +773,8 @@ def extract_realtion_persist_to_neo4j(eid, peoples, selector):
             for relation in relationship:
                 # print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
                 # 先判断关系节点是否存在
-                find_code = character_graph.find_one(label="Person", property_key="name",
-                                                     property_value=relation['being'])
-                if find_code is None:
+                match_one = matcher.match("Person", name=relation['being'], eid=eid).first()
+                if match_one is None:
                     node2 = Node("Person", name=relation['being'], eid=eid, image="PERSON.PNG")
                     character_graph.create(node2)
                     node_call_node_2 = Relationship(node, relation['realtion'], node2)
@@ -782,7 +782,7 @@ def extract_realtion_persist_to_neo4j(eid, peoples, selector):
                     node_call_node_2['eid'] = eid
                     character_graph.create(node_call_node_2)
                 else:
-                    node_call_node_2 = Relationship(node, relation['realtion'], find_code)
+                    node_call_node_2 = Relationship(node, relation['realtion'], match_one)
                     node_call_node_2['edge'] = relation['realtion']
                     node_call_node_2['eid'] = eid
                     character_graph.create(node_call_node_2)
@@ -801,9 +801,8 @@ def extract_realtion_persist_to_neo4j(eid, peoples, selector):
             for relation in relationship:
                 # print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
                 # 先判断关系节点是否存在
-                find_code = character_graph.find_one(label="Person", property_key="name",
-                                                     property_value=relation['being'])
-                if find_code is None:
+                match_one = matcher.match("Person", name=relation['being'], eid=eid).first()
+                if match_one is None:
                     node2 = Node("Person", name=relation['being'], eid=eid, image="PERSON.PNG")
                     character_graph.create(node2)
                     node_call_node_2 = Relationship(node, relation['realtion'], node2)
@@ -811,7 +810,7 @@ def extract_realtion_persist_to_neo4j(eid, peoples, selector):
                     node_call_node_2['eid'] = eid
                     character_graph.create(node_call_node_2)
                 else:
-                    node_call_node_2 = Relationship(node, relation['realtion'], find_code)
+                    node_call_node_2 = Relationship(node, relation['realtion'], match_one)
                     node_call_node_2['edge'] = relation['realtion']
                     node_call_node_2['eid'] = eid
                     character_graph.create(node_call_node_2)
@@ -1220,6 +1219,147 @@ def get_episode_detail_by_episodeid():
 """  ========================================电视场次管理 开始================================================== """
 
 
+@app.route('/api/scene/add', methods=['POST'])
+@allow_cross_domain
+def scene_add():
+    """
+    持久化电视剧场次信息至elasticsearch
+    """
+    if not request.json or 'bookid' not in request.json:
+        abort(400)
+    try:
+        scenename = request.get_json().get('scenename')
+        scenecontent = request.get_json().get('scenecontent')
+        bookid = request.get_json().get('bookid')
+        sceneversion = request.get_json().get('sceneversion')
+        charactersetting = request.get_json().get('charactersetting')
+        scenenumber = request.get_json().get('scenenumber')
+        bookname = request.get_json().get('bookname')
+        episodenumber = request.get_json().get('episodenumber')
+
+        create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        body = {"scenename": scenename, "scenecontent": scenecontent, "episodenumber": episodenumber,
+                "bookid": bookid, "sceneversion": str(sceneversion), "charactersetting": str(charactersetting),
+                "create_date": create_date, "edit_date": edit_date, "scenenumber": scenenumber,
+                "bookname": bookname}
+
+        result = es.index(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=body)
+        return jsonify({'code': 1, 'message': '新增成功', "eid": result['_id']})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '新增失败'})
+
+
+@app.route('/api/scene/count', methods=['POST'])
+@allow_cross_domain
+def scene_count():
+    """
+    ElasticSearch电视场数量
+    :return: ElasticSearch电视场数量+1
+    """
+    if not request.json or 'episodenumber' not in request.json:
+        abort(400)
+    try:
+        episodenumber = request.get_json().get('episodenumber')
+        query = {'query': {'term': {'episodenumber': episodenumber}}}
+        all_doc = es.search(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
+        return jsonify({'code': 1, 'next_scene': len(all_doc['hits']['hits']) + 1})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '获取失败'})
+
+
+@app.route('/api/scene/edit', methods=['POST'])
+@allow_cross_domain
+def scene_edit():
+    """
+    更新ElasticSearch场次信息
+    :return:
+    """
+    if not request.json or 'eid' not in request.json:
+        abort(400)
+    try:
+        scenename = request.get_json().get('scenename')
+        scenecontent = request.get_json().get('scenecontent')
+        bookid = request.get_json().get('bookid')
+        eid = request.get_json().get('eid')
+        create_date = request.get_json().get('create_date')
+        charactersetting = request.get_json().get('charactersetting')
+        sceneversion = request.get_json().get('sceneversion')
+        scenefinish = request.get_json().get('scenefinish')
+        scenenumber = request.get_json().get('scenenumber')
+        bookname = request.get_json().get('bookname')
+        # 由episode_list获取
+        episodenumber = request.get_json().get('episodenumber')
+
+        # 作品完稿不进入编辑页面
+        if scenefinish == 1:
+            work = db.session.query(Work).filter_by(eid=eid, dellabel=0).first()
+            if work is not None:
+                work.dellabel = 1
+                db.session.merge(work)
+                db.session.flush()
+                db.session.commit()
+                db.session.close()
+
+        edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        body = {"scenename": scenename, "scenecontent": scenecontent, "episodenumber": episodenumber,
+                "bookid": bookid, "create_date": create_date, "edit_date": edit_date, "scenenumber": scenenumber,
+                "charactersetting": str(charactersetting), "sceneversion": str(sceneversion), "bookname": bookname}
+        es.index(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=body, id=eid)
+        return jsonify({'code': 1, 'message': '修改成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '修改失败'})
+
+
+@app.route('/api/scene/list', methods=['POST'])
+@allow_cross_domain
+def scene_list():
+    """
+    获取ElasticSearch电视剧场次列表信息
+    :return:
+    """
+    if not request.json or 'bookid' not in request.json or 'episodenumber' not in request.json:
+        abort(400)
+
+    bookid = request.get_json().get('bookid')
+    episodenumber = request.get_json().get('episodenumber')
+    page_index = request.get_json().get('page_index') - 1
+    page_size = request.get_json().get('page_size')
+
+    book = db.session.query(Book).filter_by(bookid=bookid).first()
+
+    try:
+        query = {'query': {'term': {'episodenumber': episodenumber}}, "sort": [{"scenenumber": {"order": "asc"}}],
+                 "from": page_index, "size": page_size}
+        query_total = {'query': {'term': {'episodenumber': episodenumber}}}
+        all_doc = es.search(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
+        total = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query_total)
+        return jsonify({"data": all_doc['hits']['hits'], "total": total['count'], "description": book.abstract})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '查询失败'})
+
+
+@app.route('/api/scene/delete', methods=['POST'])
+@allow_cross_domain
+def scene_delete():
+    """
+    删除ElasticSearch电视剧场次信息
+    :return:
+    """
+    if not request.json or 'eid' not in request.json:
+        abort(400)
+    try:
+        eid = request.get_json().get('eid')
+        es.delete(index=SCENE_INDEX, doc_type=SCENE_TYPE, id=eid)
+        return jsonify({'code': 1, 'message': '删除成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '删除失败'})
 
 
 """  ========================================电视场次管理 结束================================================== """

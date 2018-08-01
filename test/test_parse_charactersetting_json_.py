@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 
-from py2neo import Graph, Relationship, NodeSelector, Node
+from py2neo import Graph, Relationship, Node, NodeMatcher
 
 from common.global_list import *
 
@@ -18,7 +18,7 @@ character_graph = Graph(
     user=CHARACTER_NEO4J_USER,
     password=CHARACTER_NEO4J_PASSWORD
 )
-selector = NodeSelector(character_graph)
+matcher = NodeMatcher(character_graph)
 
 for j in range(len(peoples)):
     """
@@ -43,7 +43,7 @@ for j in range(len(peoples)):
 eid = "xxxxxxx"
 for j in range(len(peoples)):
     node_name = peoples[j]['name']
-    node_list = selector.select("Person", name=node_name, eid=eid)
+    node_list = matcher.match("Person", name=node_name, eid=eid)
     if len(list(node_list)) == 0:
         node = Node("Person", name=node_name, eid=eid, image="PERSON.PNG")
         titles = peoples[j]['titles'].split(",")
@@ -57,10 +57,10 @@ for j in range(len(peoples)):
 
         relationship = peoples[j]['relationship']
         for relation in relationship:
-            print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
-            # 先判断节点是否存在
-            find_code = character_graph.find_one(label="Person", property_key="name", property_value=relation['being'])
-            if find_code is None:
+            # print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
+            # 先判断关系节点是否存在
+            match_one = matcher.match("Person", name=relation['being'], eid=eid).first()
+            if match_one is None:
                 node2 = Node("Person", name=relation['being'], eid=eid, image="PERSON.PNG")
                 character_graph.create(node2)
                 node_call_node_2 = Relationship(node, relation['realtion'], node2)
@@ -68,7 +68,7 @@ for j in range(len(peoples)):
                 node_call_node_2['eid'] = eid
                 character_graph.create(node_call_node_2)
             else:
-                node_call_node_2 = Relationship(node, relation['realtion'], find_code)
+                node_call_node_2 = Relationship(node, relation['realtion'], match_one)
                 node_call_node_2['edge'] = relation['realtion']
                 node_call_node_2['eid'] = eid
                 character_graph.create(node_call_node_2)
@@ -85,10 +85,10 @@ for j in range(len(peoples)):
 
         relationship = peoples[j]['relationship']
         for relation in relationship:
-            print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
-            # 先判断节点是否存在
-            find_code = character_graph.find_one(label="Person", property_key="name", property_value=relation['being'])
-            if find_code is None:
+            # print(peoples[j]['name'] + "：" + relation['realtion'] + ":" + relation['being'])
+            # 先判断关系节点是否存在
+            match_one = matcher.match("Person", name=relation['being'], eid=eid).first()
+            if match_one is None:
                 node2 = Node("Person", name=relation['being'], eid=eid, image="PERSON.PNG")
                 character_graph.create(node2)
                 node_call_node_2 = Relationship(node, relation['realtion'], node2)
@@ -96,7 +96,7 @@ for j in range(len(peoples)):
                 node_call_node_2['eid'] = eid
                 character_graph.create(node_call_node_2)
             else:
-                node_call_node_2 = Relationship(node, relation['realtion'], find_code)
+                node_call_node_2 = Relationship(node, relation['realtion'], match_one)
                 node_call_node_2['edge'] = relation['realtion']
                 node_call_node_2['eid'] = eid
                 character_graph.create(node_call_node_2)
