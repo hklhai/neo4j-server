@@ -75,7 +75,7 @@ def allow_cross_domain(fun):
     def wrapper_fun(*args, **kwargs):
         rst = make_response(fun(*args, **kwargs))
         rst.headers['Access-Control-Allow-Origin'] = '*'
-        # rst.headers['Access-Control-Allow-Methods'] = 'PUT,GET,POST,DELETE'
+        rst.headers['Access-Control-Allow-Methods'] = 'PUT,GET,POST,DELETE'
         # allow_headers = "Referer,Accept,Origin,User-Agent"
         # rst.headers['Access-Control-Allow-Headers'] = allow_headers
         return rst
@@ -163,13 +163,29 @@ def work_detail():
     if work is not None:
         body = {"query": {"term": {"_id": work.eid}}}
         all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
-        eid = all_doc['hits']['hits'][0]['_id']
-        bookid = all_doc['hits']['hits'][0]['_source']['bookid']
-        # 查询作品类型，需要区别电视剧剧本与剧本小说
-        book = db.session.query(Book).filter_by(bookid=bookid).first()
-        db.session.close()
-        return jsonify({'code': 1, "chapter": all_doc['hits']['hits'][0].get('_source'),
-                        "eid": eid, "category": book.category})
+        if len(all_doc['hits']['hits']) == 0:
+            pass
+        else:
+            eid = all_doc['hits']['hits'][0]['_id']
+            bookid = all_doc['hits']['hits'][0]['_source']['bookid']
+            # 查询作品类型，需要区别电视剧剧本与剧本小说
+            book = db.session.query(Book).filter_by(bookid=bookid).first()
+            db.session.close()
+            return jsonify({'code': 1, "chapter": all_doc['hits']['hits'][0].get('_source'),
+                            "eid": eid, "category": book.category})
+
+        # 增加查询电视剧场
+        all_doc = es.search(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=body)
+        if len(all_doc['hits']['hits']) == 0:
+            pass
+        else:
+            eid = all_doc['hits']['hits'][0]['_id']
+            bookid = all_doc['hits']['hits'][0]['_source']['bookid']
+
+            book = db.session.query(Book).filter_by(bookid=bookid).first()
+            db.session.close()
+            return jsonify({'code': 1, "chapter": all_doc['hits']['hits'][0].get('_source'),
+                            "eid": eid, "category": book.category})
     else:
         return jsonify({'code': 0, 'message': '无信息！'})
 
@@ -1229,7 +1245,7 @@ def get_episode_detail_by_episodeid():
 def scene_count():
     """
     ElasticSearch电视场数量
-    :return: ElasticSearch电视场数量+1
+    :return: ElasticSearch电视场数量+1 , 返回当前集
     """
     if not request.json or 'episodeid' not in request.json or 'bookid' not in request.json:
         abort(400)
@@ -1237,21 +1253,22 @@ def scene_count():
         episodeid = request.get_json().get('episodeid')
         bookid = request.get_json().get('bookid')
         # 不确定集数根据作品id查询
+        episode = db.session.query(Episode).filter_by(bookid=bookid).order_by(Episode.episodenumber.desc()).first()
+
         if episodeid == 0:
-            episode = db.session.query(Episode).filter_by(bookid=bookid).order_by(Episode.episodenumber.desc()).first()
             if episode is not None:
                 # 存在去除最大集数
                 episodeid = episode.episodeid
                 query = {'query': {'term': {'episodeid': episodeid}}}
                 all_doc = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
-                return jsonify({'code': 1, 'next_scene': all_doc['count'] + 1})
+                return jsonify({'code': 1, 'next_scene': all_doc['count'] + 1, "episodenum": episode.episodenumber})
             else:
                 # 不存在为1
-                return jsonify({'code': 1, 'next_scene': 1})
+                return jsonify({'code': 1, 'next_scene': 1, "episodenum": 0})
         else:
             query = {'query': {'term': {'episodeid': episodeid}}}
-            all_doc = es.search(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
-            return jsonify({'code': 1, 'next_scene': len(all_doc['hits']['hits']) + 1})
+            total = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
+            return jsonify({'code': 1, 'next_scene': total['count'] + 1, "episodenum": episode.episodenumber})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '获取失败'})
@@ -1379,6 +1396,25 @@ def scene_delete():
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '删除失败'})
+
+
+@app.route('/api/scene/deatil', methods=['POST'])
+@allow_cross_domain
+def scene_deatil():
+    """
+    获取ElasticSearch电视剧场次信息
+    :return: 电视剧场次信息
+    """
+    if not request.json or 'eid' not in request.json:
+        abort(400)
+    try:
+        eid = request.get_json().get('eid')
+        body = {"query": {"term": {"_id": eid}}}
+        all_doc = es.search(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=body)
+        return jsonify(all_doc['hits']['hits'][0].get('_source'))
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '查询失败'})
 
 
 """  ========================================电视场次管理 结束================================================== """
