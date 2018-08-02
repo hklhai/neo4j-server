@@ -1254,6 +1254,7 @@ def scene_count():
         bookid = request.get_json().get('bookid')
         # 不确定集数根据作品id查询
         episode = db.session.query(Episode).filter_by(bookid=bookid).order_by(Episode.episodenumber.desc()).first()
+        e = json.loads(json.dumps(episode, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
 
         if episodeid == 0:
             if episode is not None:
@@ -1261,14 +1262,14 @@ def scene_count():
                 episodeid = episode.episodeid
                 query = {'query': {'term': {'episodeid': episodeid}}}
                 all_doc = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
-                return jsonify({'code': 1, 'next_scene': all_doc['count'] + 1, "episode": episode})
+                return jsonify({'code': 1, 'next_scene': all_doc['count'] + 1, "episode": e})
             else:
                 # 不存在为1
                 return jsonify({'code': 1, 'next_scene': 1, "episode": 0})
         else:
             query = {'query': {'term': {'episodeid': episodeid}}}
             total = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
-            return jsonify({'code': 1, 'next_scene': total['count'] + 1, "episode": episode})
+            return jsonify({'code': 1, 'next_scene': total['count'] + 1, "episode": e})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '获取失败'})
@@ -1429,6 +1430,10 @@ def scene_deatil():
 @app.route('/api/comment/search', methods=['POST'])
 @allow_cross_domain
 def comment_search():
+    """
+    评论关键字查询
+    :return:  查询结果
+    """
     if not request.json or 'word' not in request.json:
         abort(400)
 
@@ -1460,6 +1465,9 @@ def not_found():
 
 
 if __name__ == '__main__':
+    """
+    main入口函数
+    """
     if DEV_MODE == "DEBUG":
         app.run(host="0.0.0.0", port=8888, debug=True)
     else:
