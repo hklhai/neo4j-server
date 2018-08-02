@@ -1261,14 +1261,14 @@ def scene_count():
                 episodeid = episode.episodeid
                 query = {'query': {'term': {'episodeid': episodeid}}}
                 all_doc = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
-                return jsonify({'code': 1, 'next_scene': all_doc['count'] + 1, "episodenum": episode.episodenumber})
+                return jsonify({'code': 1, 'next_scene': all_doc['count'] + 1, "episode": episode})
             else:
                 # 不存在为1
-                return jsonify({'code': 1, 'next_scene': 1, "episodenum": 0})
+                return jsonify({'code': 1, 'next_scene': 1, "episode": 0})
         else:
             query = {'query': {'term': {'episodeid': episodeid}}}
             total = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
-            return jsonify({'code': 1, 'next_scene': total['count'] + 1, "episodenum": episode.episodenumber})
+            return jsonify({'code': 1, 'next_scene': total['count'] + 1, "episode": episode})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '获取失败'})
@@ -1291,14 +1291,15 @@ def scene_add():
         scenenumber = request.get_json().get('scenenumber')
         bookname = request.get_json().get('bookname')
         episodeid = request.get_json().get('episodeid')
+        sceneabstract = request.get_json().get('sceneabstract')
 
         create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         body = {"scenename": scenename, "scenecontent": scenecontent, "episodeid": episodeid,
-                "bookid": bookid, "sceneversion": str(sceneversion), "charactersetting": str(charactersetting),
-                "create_date": create_date, "edit_date": edit_date, "scenenumber": scenenumber,
-                "bookname": bookname}
+                "sceneabstract": sceneabstract, "bookid": bookid, "sceneversion": str(sceneversion),
+                "charactersetting": str(charactersetting), "create_date": create_date, "edit_date": edit_date,
+                "scenenumber": scenenumber, "bookname": bookname}
 
         result = es.index(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=body)
         return jsonify({'code': 1, 'message': '新增成功', "eid": result['_id']})
@@ -1356,6 +1357,8 @@ def scene_edit():
         scenefinish = request.get_json().get('scenefinish')
         scenenumber = request.get_json().get('scenenumber')
         bookname = request.get_json().get('bookname')
+        # 可能存在字段，艾亚民咨询过谢、马
+        sceneabstract = request.get_json().get('sceneabstract')
         # 由episode_list获取
         episodeid = request.get_json().get('episodeid')
 
@@ -1371,8 +1374,9 @@ def scene_edit():
 
         edit_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         body = {"scenename": scenename, "scenecontent": scenecontent, "episodeid": episodeid,
-                "bookid": bookid, "create_date": create_date, "edit_date": edit_date, "scenenumber": scenenumber,
-                "charactersetting": str(charactersetting), "sceneversion": str(sceneversion), "bookname": bookname}
+                "sceneabstract": sceneabstract, "bookid": bookid, "create_date": create_date, "edit_date": edit_date,
+                "scenenumber": scenenumber, "charactersetting": str(charactersetting),
+                "sceneversion": str(sceneversion), "bookname": bookname}
         es.index(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=body, id=eid)
         return jsonify({'code': 1, 'message': '修改成功'})
     except Exception as err:
