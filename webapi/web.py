@@ -163,8 +163,13 @@ def work_detail():
     if work is not None:
         body = {"query": {"term": {"_id": work.eid}}}
         all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=body)
+        eid = all_doc['hits']['hits'][0]['_id']
+        bookid = all_doc['hits']['hits'][0]['_source']['bookid']
+        # 查询作品类型，需要区别电视剧剧本与剧本小说
+        book = db.session.query(Book).filter_by(bookid=bookid).first()
+        db.session.close()
         return jsonify({'code': 1, "chapter": all_doc['hits']['hits'][0].get('_source'),
-                        "eid": all_doc['hits']['hits'][0]['_id']})
+                        "eid": eid, "category": book.category})
     else:
         return jsonify({'code': 0, 'message': '无信息！'})
 
