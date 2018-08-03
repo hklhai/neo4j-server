@@ -540,7 +540,6 @@ def chapter_add():
 def chapter_edit():
     """
     更新ElasticSearch章节信息
-    :return:
     """
     if not request.json or 'bookid' not in request.json or 'eid' not in request.json:
         abort(400)
@@ -556,6 +555,8 @@ def chapter_edit():
         chapterfinish = request.get_json().get('chapterfinish')
         chapternumber = request.get_json().get('chapternumber')
         bookname = request.get_json().get('bookname')
+
+        persist_current_eid(bookid, eid, chaptername, 0, chapternumber)
 
         # 作品完稿不进入编辑页面
         if chapterfinish == 1:
@@ -1161,6 +1162,7 @@ def episode_list():
     bookid = request.get_json().get('bookid')
     page_index = request.get_json().get('page_index')
     page_size = request.get_json().get('page_size')
+    book = db.session.query(Book).filter_by(bookid=bookid).first()
 
     episodes = db.session.query(Episode).filter_by(bookid=bookid).order_by(Episode.episodenumber).limit(
         page_size).offset((page_index - 1) * page_size).all()
@@ -1168,7 +1170,7 @@ def episode_list():
 
     lists = json.loads(json.dumps(episodes, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
     db.session.close()
-    return jsonify({"episodes": lists, "total": total})
+    return jsonify({"episodes": lists, "total": total, "description": book.abstract})
 
 
 @app.route('/api/episode/edit', methods=['POST'])
@@ -1363,6 +1365,12 @@ def scene_edit():
         # 由episode_list获取
         episodeid = request.get_json().get('episodeid')
 
+        # 根据episodeid查剧集号
+        episode = db.session.query(Episode).filter_by(episodeid=episodeid).first()
+
+        # 增加保存图书当前编辑信息
+        persist_current_eid(bookid, eid, scenename, episode.episodenumber, scenenumber)
+
         # 作品完稿不进入编辑页面
         if scenefinish == 1:
             work = db.session.query(Work).filter_by(eid=eid, dellabel=0).first()
@@ -1383,6 +1391,25 @@ def scene_edit():
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '修改失败'})
+
+
+def persist_current_eid(bookid, eid, currentedit, episodenumber, scenenumber):
+    """
+    增加保存图书当前编辑信息
+    :param bookid: 图书id
+    :param eid: 最新章节或场次id
+    :param currentedit: 章节或场次名称
+    """
+    book = db.session.query(Book).filter_by(bookid=bookid).first()
+    if book is not None:
+        book.eid = eid
+        book.currentedit = currentedit
+        book.episodenumber = episodenumber
+        book.scenenumber = scenenumber
+        db.session.merge(book)
+        db.session.flush()
+        db.session.commit()
+        db.session.close()
 
 
 @app.route('/api/scene/delete', methods=['POST'])

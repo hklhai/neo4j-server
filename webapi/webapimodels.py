@@ -61,6 +61,10 @@ class Book(db.Model):
     label = db.Column(db.String(20))
     abstract = db.Column(db.String(1000))
     writing = db.Column(db.String(500))
+    eid = db.Column(db.String(50))
+    currentedit = db.Column(db.String(255))
+    episodenumber = db.Column(db.Integer)
+    scenenumber = db.Column(db.Integer)
 
     def get_id(self):
         return self.bookid
@@ -82,6 +86,10 @@ class VBook(db.Model):
     label = db.Column(db.String(20))
     abstract = db.Column(db.String(1000))
     writing = db.Column(db.String(500))
+    eid = db.Column(db.String(50))
+    currentedit = db.Column(db.String(255))
+    episodenumber = db.Column(db.Integer)
+    scenenumber = db.Column(db.Integer)
 
     def get_id(self):
         return self.bookid
