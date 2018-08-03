@@ -8,4 +8,6 @@ git -c core.quotepath=false -c log.showSignature=false pull --progress --no-stat
 
 cd webapi
 
+pipenv shell
+
 nohup gunicorn -w 4 -b 127.0.0.1:8777 web:app web.log 2>&1 &
