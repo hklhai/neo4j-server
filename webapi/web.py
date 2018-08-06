@@ -627,7 +627,7 @@ def chapter_delete():
 
 @app.route('/api/chapter/detail', methods=['POST'])
 @allow_cross_domain
-def get_chapter_detail_by_eid():
+def chapter_detail_by_eid():
     """
     通过eid查询章节详细信息
     """
