@@ -12,6 +12,7 @@ from elasticsearch import Elasticsearch
 from flask import Flask, make_response
 from flask import abort
 from flask import request, jsonify, flash
+from flask import send_from_directory
 from flask_bootstrap import Bootstrap
 from flask_cors import CORS
 from flask_httpauth import HTTPTokenAuth
@@ -1282,6 +1283,7 @@ def scene_count():
 def scene_add():
     """
     持久化电视剧场次信息至elasticsearch
+    :return: 电视剧场次eid
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
@@ -1316,7 +1318,7 @@ def scene_add():
 def scene_list():
     """
     获取ElasticSearch电视剧场次列表信息
-    :return:
+    :return: 列表场次信息
     """
     if not request.json or 'bookid' not in request.json or 'episodeid' not in request.json:
         abort(400)
@@ -1345,7 +1347,6 @@ def scene_list():
 def scene_edit():
     """
     更新ElasticSearch场次信息
-    :return:
     """
     if not request.json or 'eid' not in request.json:
         abort(400)
@@ -1480,6 +1481,62 @@ def comment_search():
 
 
 """  ========================================评论数据查询 结束================================================== """
+
+"""  ========================================打标系统管理 开始================================================== """
+
+
+@app.route('/api/comment/batch', methods=['GET'])
+@allow_cross_domain
+def comment_batch():
+    """
+    返回未打标数据
+    :return:  未打标数据
+    """
+    try:
+        query = {'query': {'bool': {"must_not": {"exists": {"field": "emotion"}}}}, "from": 0, "size": 20}
+        query_total = {'query': {'bool': {"must_not": {"exists": {"field": "emotion"}}}}}
+        all_doc = es.search(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query)
+        total = es.count(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query_total)
+        return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '查询失败'})
+
+
+@app.route('/api/comment/edit', methods=['POST'])
+@allow_cross_domain
+def comment_edit():
+    """
+    打标ElasticSearch中评论信息
+    """
+    if not request.json or 'eid' not in request.json:
+        abort(400)
+    try:
+        eid = request.get_json().get('eid')
+        create_date = request.get_json().get('create_date')
+        title = request.get_json().get('title')
+        content = request.get_json().get('content')
+        emotion = request.get_json().get('emotion')
+
+        body = {"title": title, "create_date": create_date, "content": content, "emotion": emotion}
+        es.index(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=body, id=eid)
+        return jsonify({'code': 1, 'message': '修改成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '修改失败'})
+
+
+"""  ========================================打标系统管理 结束================================================== """
+
+
+@app.route('/favicon.ico')
+@allow_cross_domain
+def favicon():
+    """
+    获取网站ico图标
+    :return: 网站图标
+    """
+    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico')
 
 
 @app.errorhandler(404)

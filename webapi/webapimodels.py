@@ -72,7 +72,7 @@ class Book(db.Model):
 
 class VBook(db.Model):
     """
-    VBook Mdoel  小说信息
+    VBook Mdoel  小说试图信息
     """
     __tablename__ = 'v_book'
     bookid = db.Column(db.Integer, primary_key=True)
