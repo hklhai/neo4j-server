@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import time
 from datetime import datetime
 from functools import wraps
 from itertools import groupby
@@ -372,8 +373,12 @@ def book_list():
 
     books = db.session.query(VBook).filter_by(userid=userid, booklabel=0).order_by(VBook.bookid).limit(
         page_size).offset((page_index - 1) * page_size).all()
-    total = db.session.query(VBook).filter_by(userid=userid, booklabel=0).count()
+    # todo 查看所有作品
+    if userid == '19':
+        books = db.session.query(VBook).filter_by(booklabel=0).order_by(VBook.bookid).limit(
+            page_size).offset((page_index - 1) * page_size).all()
 
+    total = db.session.query(VBook).filter_by(userid=userid, booklabel=0).count()
     lists = json.loads(json.dumps(books, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
 
     lists.sort(key=itemgetter('bookstatus'))
@@ -598,7 +603,7 @@ def chapter_list():
 
     try:
         query = {'query': {'term': {'bookid': bookid}}, "sort": [{"chapternumber": {"order": "asc"}}],
-                 "from": page_index, "size": page_size}
+                 "from": page_index * page_size, "size": page_size}
         query_total = {'query': {'term': {'bookid': bookid}}}
         all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query)
         total = es.count(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query_total)
@@ -620,10 +625,30 @@ def chapter_delete():
     try:
         eid = request.get_json().get('eid')
         es.delete(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, id=eid)
+        # 需要判断最新章节是不是正在删除的章节，如果是，将最新编辑章节设置为空
+        delete_current_book(eid)
+
         return jsonify({'code': 1, 'message': '删除章节成功'})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '删除章节失败'})
+
+
+def delete_current_book(eid):
+    """
+    删除当前编辑作品，并睡眠1s（ElasticSearch 删除较慢，因为需要删除大量索引）
+    :param eid: 章节或场次eid
+    """
+    book = db.session.query(Book).filter_by(eid=eid).first()
+    if book is not None:
+        book.eid = None
+        book.currentedit = None
+        book.scenenumber = None
+        db.session.merge(book)
+        db.session.flush()
+        db.session.commit()
+        db.session.close()
+    time.sleep(1)
 
 
 @app.route('/api/chapter/detail', methods=['POST'])
@@ -1332,7 +1357,7 @@ def scene_list():
 
     try:
         query = {'query': {'term': {'episodeid': episodeid}}, "sort": [{"scenenumber": {"order": "asc"}}],
-                 "from": page_index, "size": page_size}
+                 "from": page_index * page_size, "size": page_size}
         query_total = {'query': {'term': {'episodeid': episodeid}}}
         all_doc = es.search(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
         total = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query_total)
@@ -1425,6 +1450,8 @@ def scene_delete():
     try:
         eid = request.get_json().get('eid')
         es.delete(index=SCENE_INDEX, doc_type=SCENE_TYPE, id=eid)
+        # 需要判断最新章节是不是正在删除的章节，如果是，将最新编辑章节设置为空
+        delete_current_book(eid)
         return jsonify({'code': 1, 'message': '删除成功'})
     except Exception as err:
         print(err)
@@ -1469,7 +1496,7 @@ def comment_search():
     page_index = request.get_json().get('page_index') - 1
     page_size = request.get_json().get('page_size')
     try:
-        query = {'query': {'match_phrase': {'content': word}}, "from": page_index, "size": page_size,
+        query = {'query': {'match_phrase': {'content': word}}, "from": page_index * page_size, "size": page_size,
                  "highlight": {"fields": {"content": {}}}}
         query_total = {'query': {'match_phrase': {'content': word}}}
         all_doc = es.search(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query)
