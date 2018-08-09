@@ -241,13 +241,17 @@ def user_detail():
     """
     用户信息获取
     """
-    if not request.json or 'userid' not in request.json:
-        abort(400)
-    userid = request.get_json().get('userid')
-    user = db.session.query(User).filter_by(uid=userid).first()
-    u = json.loads(json.dumps(user, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
-    db.session.close()
-    return jsonify({'user': u})
+    try:
+        if not request.json or 'userid' not in request.json:
+            abort(400)
+        userid = request.get_json().get('userid')
+        user = db.session.query(User).filter_by(uid=userid).first()
+        u = json.loads(json.dumps(user, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
+        db.session.close()
+        return jsonify({'code': 1, 'user': u})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '获取失败'})
 
 
 @app.route('/api/user/edit', methods=['POST'])
@@ -1004,7 +1008,8 @@ def search_list():
         all_doc = es.search(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query)
         total = es.count(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query_total)
         # 存储用户查询数据
-        persist_user_search(search_text, userid, "graph", total['count'])
+        if search_text != "":
+            persist_user_search(search_text, userid, "graph", total['count'])
 
         return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
     except Exception as err:
@@ -1513,13 +1518,23 @@ def comment_search():
     page_size = request.get_json().get('page_size')
     try:
         query = {'query': {'match_phrase': {'content': word}}, "from": page_index * page_size, "size": page_size,
-                 "highlight": {"fields": {"content": {}}}}
+                 "highlight": {
+                     "fields": {"content": {"fragment_size": 300, "number_of_fragments": 5, "no_match_size": 300}}}}
         query_total = {'query': {'match_phrase': {'content': word}}}
         all_doc = es.search(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query)
         total = es.count(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query_total)
 
+        # elasticsearch 保证查询效率返回高亮结果截断处理；重新拼接处理
+        for i in range(len(all_doc['hits']['hits'])):
+            content = all_doc['hits']['hits'][i]['_source']['content']
+            highlight_content = all_doc['hits']['hits'][i]['highlight']['content']
+            tmp = highlight_content[0].replace("<em>", "").replace('</em>', '')
+            highlight_content = content.replace(tmp, highlight_content[0])
+            all_doc['hits']['hits'][i]['highlight']['content'][0] = highlight_content
+
         # 持久化搜索用户、词、时间、应用、查询结果返回数
-        persist_user_search(word, userid, "comment",  total['count'])
+        if word != "":
+            persist_user_search(word, userid, "comment", total['count'])
 
         return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
     except Exception as err:
