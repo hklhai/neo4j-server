@@ -53,7 +53,10 @@ SEARCH_TEXT_TYPE = "text"
 SCENE_INDEX = "scene_data"
 SCENE_TYPE = "scene"
 
-# ElasticSearch index
+# 评论数据
 COMMENT_INDEX = "news_comment"
 COMMENT_TYPE = "comment"
 
+# 用户搜索日志
+USER_SEARCH_INDEX = "user_search"
+USER_SEARCH_TYPE = "search"

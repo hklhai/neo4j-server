@@ -993,6 +993,7 @@ def search_list():
     search_text = request.get_json().get('search_text')
     page_index = request.get_json().get('page_index') - 1
     page_size = request.get_json().get('page_size')
+    userid = request.get_json().get('userid')
 
     try:
         # 短语搜索match_phrase https://blog.csdn.net/cc907566076/article/details/78553950
@@ -1002,6 +1003,9 @@ def search_list():
 
         all_doc = es.search(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query)
         total = es.count(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query_total)
+        # 存储用户查询数据
+        persist_user_search(search_text, userid, "graph", total['count'])
+
         return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
     except Exception as err:
         print(err)
@@ -1480,6 +1484,19 @@ def scene_deatil():
 """  ========================================评论数据查询 开始================================================== """
 
 
+def persist_user_search(word, userid, app, total):
+    """
+    持久化用户搜索信息
+    :param word:   搜索词
+    :param userid: 搜索用户
+    :param app:    应用
+    :param total:  返回记录数
+    """
+    create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    body = {"search_word": word, "userid": userid, "app": app, "total": total, "create_date": create_date}
+    es.index(index=USER_SEARCH_INDEX, doc_type=USER_SEARCH_TYPE, body=body)
+
+
 @app.route('/api/comment/search', methods=['POST'])
 @allow_cross_domain
 def comment_search():
@@ -1491,6 +1508,7 @@ def comment_search():
         abort(400)
 
     word = request.get_json().get('word')
+    userid = request.get_json().get('userid')
     page_index = request.get_json().get('page_index') - 1
     page_size = request.get_json().get('page_size')
     try:
@@ -1499,6 +1517,10 @@ def comment_search():
         query_total = {'query': {'match_phrase': {'content': word}}}
         all_doc = es.search(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query)
         total = es.count(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query_total)
+
+        # 持久化搜索用户、词、时间、应用、查询结果返回数
+        persist_user_search(word, userid, "comment",  total['count'])
+
         return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
     except Exception as err:
         print(err)
