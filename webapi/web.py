@@ -260,24 +260,22 @@ def user_edit():
     """
     用户信息修改
     """
-    if not request.json or 'userid' not in request.json:
+    if not request.json or 'uid' not in request.json:
         abort(400)
-    userid = request.get_json().get('userid')
+    userid = request.get_json().get('uid')
     username = request.get_json().get('username')
-    phonenumber = request.get_json().get('phonenumber')
     sex = request.get_json().get('sex')
     name = request.get_json().get('name')
     address = request.get_json().get('address')
     idcard = request.get_json().get('idcard')
 
     # 查询用户名是否重名
-    user_username = db.session.query(User).filter_by(username=username).first()
-    if user_username is not None:
-        return jsonify({'code': 0, 'message': '该用户名已存在，请确认后新建！'})
+    user_idcard = db.session.query(User).filter_by(idcard=idcard).first()
+    if user_idcard is not None:
+        return jsonify({'code': 0, 'message': '该身份证号已存在，请确认后新建！'})
 
     user = db.session.query(User).filter_by(uid=userid).first()
     user.username = username
-    user.phonenumber = phonenumber
     user.sex = sex
     user.name = name
     user.address = address
@@ -313,6 +311,23 @@ def user_modify_password():
         return jsonify({'code': 1, 'message': '密码修改成功！'})
     else:
         return jsonify({'code': 0, 'message': '原密码错误！'})
+
+
+@app.route('/api/validUser', methods=['POST'])
+@allow_cross_domain
+def valid_user_info():
+    """
+    校验身份证号与姓名是否填写
+    :return: 1 已经填写；0 未填写
+    """
+    if not request.json or 'userid' not in request.json:
+        abort(400)
+    userid = request.get_json().get('userid')
+    u_userid = db.session.query(User).filter_by(uid=userid).first()
+    if u_userid.name is None or u_userid.idcard is None:
+        return jsonify({'code': 0, 'message': '您还没有完善用户信息！'})
+    else:
+        return jsonify({'code': 1, 'message': '用户信息已完善！'})
 
 
 """  ========================================用户信息管理 结束================================================== """
