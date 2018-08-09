@@ -292,13 +292,13 @@ def user_modify_password():
     """
     用户密码修改
     """
-    if not request.json or 'username' not in request.json or "password" not in request.json \
+    if not request.json or 'userid' not in request.json or "password" not in request.json \
             or "newpassword" not in request.json:
         abort(400)
-    username = request.get_json().get('username')
+    userid = request.get_json().get('userid')
     password = request.get_json().get('password')
     newpassword = request.get_json().get('newpassword')
-    u_phonenumber = db.session.query(User).filter_by(phonenumber=username).first()
+    u_phonenumber = db.session.query(User).filter_by(uid=userid).first()
 
     if u_phonenumber is not None and check_password_hash(u_phonenumber.password, password):
         u_phonenumber.password = generate_password_hash(newpassword)
@@ -306,10 +306,8 @@ def user_modify_password():
         db.session.flush()
         db.session.commit()
         db.session.close()
-        return jsonify(
-            {'code': 1, 'message': '密码修改成功', 'username': u_phonenumber.username, 'userid': u_phonenumber.uid})
+        return jsonify({'code': 1, 'message': '密码修改成功！'})
     else:
-        flash('用户或密码错误')
         return jsonify({'code': 0, 'message': '原密码错误！'})
 
 
@@ -374,9 +372,9 @@ def book_list():
     books = db.session.query(VBook).filter_by(userid=userid, booklabel=0).order_by(VBook.bookid).limit(
         page_size).offset((page_index - 1) * page_size).all()
     # todo 查看所有作品
-    if userid == '19':
-        books = db.session.query(VBook).filter_by(booklabel=0).order_by(VBook.bookid).limit(
-            page_size).offset((page_index - 1) * page_size).all()
+    # if userid == '19':
+    #     books = db.session.query(VBook).filter_by(booklabel=0).order_by(VBook.bookid).limit(
+    #         page_size).offset((page_index - 1) * page_size).all()
 
     total = db.session.query(VBook).filter_by(userid=userid, booklabel=0).count()
     lists = json.loads(json.dumps(books, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
@@ -1546,7 +1544,7 @@ def comment_edit():
         emotion = request.get_json().get('emotion')
 
         body = {"title": title, "create_date": create_date, "content": content, "emotion": emotion}
-        es.index(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=body, id=eid)
+        es.index(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=body, id=eid)
         return jsonify({'code': 1, 'message': '修改成功'})
     except Exception as err:
         print(err)
