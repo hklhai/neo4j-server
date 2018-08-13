@@ -1058,7 +1058,8 @@ def graph_search():
     nodes.append(x[0].get('x'))
     for i in range(len(x)):
         nodes.append(x[i].get('y'))
-        data = {'source': 0, 'target': (i + 1), 'type': x[i].get('r')['edge'], 'eid': x[i].get('y')['eid']}
+        edge = "人物" if "任务" == x[i].get('r')['edge'] else x[i].get('r')['edge']
+        data = {'source': 0, 'target': (i + 1), 'type': edge, 'eid': x[i].get('y')['eid']}
         links.append(data)
     nodes = json.loads(json.dumps(nodes, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
     return jsonify({"nodes": nodes, "edges": links})
@@ -1515,6 +1516,29 @@ def persist_user_search(word, userid, app, total):
     create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     body = {"search_word": word, "userid": userid, "app": app, "total": total, "create_date": create_date}
     es.index(index=USER_SEARCH_INDEX, doc_type=USER_SEARCH_TYPE, body=body)
+
+
+@app.route('/api/comment/title', methods=['POST'])
+@allow_cross_domain
+def comment_title():
+    """
+    根据title查询
+    :return:  查询结果
+    """
+    if not request.json or 'title' not in request.json:
+        abort(400)
+    title = request.get_json().get('title')
+    page_index = request.get_json().get('page_index') - 1
+    page_size = request.get_json().get('page_size')
+    try:
+        query = {'query': {'match': {'title': title}}, "from": page_index * page_size, "size": page_size}
+        query_total = {'query': {'match': {'title': title}}}
+        all_doc = es.search(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query)
+        total = es.count(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query_total)
+        return jsonify({"data": all_doc['hits']['hits'], "total": total['count']})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '查询失败'})
 
 
 @app.route('/api/comment/search', methods=['POST'])
