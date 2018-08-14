@@ -1016,8 +1016,8 @@ def search_list():
 
     try:
         # 短语搜索match_phrase https://blog.csdn.net/cc907566076/article/details/78553950
-        query = {'query': {'match_phrase': {'search_text': search_text}}, "from": page_index, "size": page_size,
-                 "highlight": {"fields": {"search_text": {}}}}
+        query = {'query': {'match_phrase': {'search_text': search_text}}, "from": page_index * page_size,
+                 "size": page_size, "highlight": {"fields": {"search_text": {}}}}
         query_total = {'query': {'match_phrase': {'search_text': search_text}}}
 
         all_doc = es.search(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query)
@@ -1052,7 +1052,7 @@ def graph_search():
         return jsonify({"nodes": [], "edges": []})
 
     event = c[0]['y']['name']
-    x = graph.run("START x=node(*) MATCH (x)-[r]->(y) where x.name=\'" + event + "\'  RETURN * LIMIT 30").data()
+    x = graph.run("START x=node(*) MATCH (x)-[r]->(y) where x.name=\'" + event + "\'  RETURN * LIMIT 18").data()
     nodes = []
     links = []
     nodes.append(x[0].get('x'))
