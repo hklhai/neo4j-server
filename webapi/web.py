@@ -25,6 +25,7 @@ from werkzeug.contrib.fixers import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 sys.path.append(os.path.dirname(os.getcwd()))
+from common.utils import Crypt
 
 from common.global_list import *
 from webapi.webapimodels import new_alchemy_encoder, Work, Book, User, VBook, Episode
@@ -141,10 +142,13 @@ def login():
         abort(400)
     username = request.get_json().get('username')
     password = request.get_json().get('password')
+
+    crypt = Crypt()
+    orgin_password = crypt.decrypt(password)
     u_phonenumber = db.session.query(User).filter_by(phonenumber=username).first()
     db.session.close()
 
-    if u_phonenumber is not None and check_password_hash(u_phonenumber.password, password):
+    if u_phonenumber is not None and check_password_hash(u_phonenumber.password, orgin_password):
         return jsonify({'code': 1, 'message': '成功登录', 'username': u_phonenumber.username, 'userid': u_phonenumber.uid})
     else:
         flash('用户或密码错误')
