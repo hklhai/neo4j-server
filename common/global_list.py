@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
+import base64
 
+from Crypto.Cipher import AES
 
 # DEV_MODE = "DEBUG"
 DEV_MODE = "FML"
@@ -60,3 +62,29 @@ COMMENT_TYPE = "comment"
 # 用户搜索日志
 USER_SEARCH_INDEX = "user_search"
 USER_SEARCH_TYPE = "search"
+
+mode = AES.MODE_CBC
+key = 'keyskeyskeyskeys'
+iv = '1234567890123456'
+PADDING = '\0'
+
+
+def encrypt(source):
+    # str = 'y+BjjfXVZJ2f+ZYoljpJdw=='
+    pad_it = lambda s: s + (16 - len(s) % 16) * PADDING
+    # source = 'admin'
+    generator = AES.new(key, AES.MODE_CBC, iv)
+    crypt = generator.encrypt(pad_it(source))
+    crypted_string = base64.b64encode(crypt)
+    return crypted_string
+
+
+def decrypt(crypt):
+    # 先转成字节数组
+    b = bytes(crypt, encoding='utf-8')
+    # base64解密
+    base = base64.b64decode(crypt)
+    generator = AES.new(key, AES.MODE_CBC, iv)
+    recovery = generator.decrypt(base)
+    orgin = str(recovery, encoding='utf-8')
+    return orgin.rstrip(PADDING)

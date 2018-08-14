@@ -25,7 +25,6 @@ from werkzeug.contrib.fixers import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 sys.path.append(os.path.dirname(os.getcwd()))
-from common.utils import Crypt
 
 from common.global_list import *
 from webapi.webapimodels import new_alchemy_encoder, Work, Book, User, VBook, Episode
@@ -143,8 +142,7 @@ def login():
     username = request.get_json().get('username')
     password = request.get_json().get('password')
 
-    crypt = Crypt()
-    orgin_password = crypt.decrypt(password)
+    orgin_password = decrypt(password)
     u_phonenumber = db.session.query(User).filter_by(phonenumber=username).first()
     db.session.close()
 
