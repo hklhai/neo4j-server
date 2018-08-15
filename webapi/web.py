@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import logging
 import os
 import sys
 import time
@@ -21,6 +22,7 @@ from flask_login import LoginManager
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 from py2neo import Graph, Node, Relationship, NodeMatcher
+from stanfordcorenlp import StanfordCoreNLP
 from werkzeug.contrib.fixers import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -392,7 +394,7 @@ def book_list():
 
     books = db.session.query(VBook).filter_by(userid=userid, booklabel=0).order_by(VBook.bookid).limit(
         page_size).offset((page_index - 1) * page_size).all()
-    # todo 查看所有作品
+    # todo 超级管理员 查看所有作品功能，可能引发最后编辑信息保存至工作空间
     # if userid == '19':
     #     books = db.session.query(VBook).filter_by(booklabel=0).order_by(VBook.bookid).limit(
     #         page_size).offset((page_index - 1) * page_size).all()
@@ -622,7 +624,10 @@ def chapter_list():
 
     try:
         query = {'query': {'term': {'bookid': bookid}}, "sort": [{"chapternumber": {"order": "asc"}}],
-                 "from": page_index * page_size, "size": page_size}
+                 "from": page_index * page_size, "size": page_size, "_source": {
+                "includes": ["chapternumber", "chaptername", "chapterabstract", "edit_date"],
+                "excludes": ["chaptercontent"]
+            }}
         query_total = {'query': {'term': {'bookid': bookid}}}
         all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query)
         total = es.count(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query_total)
@@ -775,6 +780,131 @@ def character_edit():
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '修改失败'})
+
+
+def deal_sentence(entity_list, event_label, except_label, except_list, nlp, sentence):
+    ner_list = nlp.ner(sentence)
+    for ele in ner_list:
+        if ele[1] in except_label:
+            continue
+        elif ele[0] in except_list:
+            continue
+        elif ele[1] in event_label:
+            # entity_list.append((ele[0], ele[1]))
+            parse_ner_list(entity_list, ner_list, except_label, except_list, event_label)
+        else:
+            continue
+
+
+def parse_ner_list(entity_list, ner_list, except_label, except_list, event_label):
+    for i in range(len(ner_list)):
+        if ner_list[i][1] in except_label:
+            continue
+        elif ner_list[i][0] in except_list:
+            continue
+        elif ner_list[i][1] in event_label:
+            word = ner_list[i][0]
+            label = ner_list[i][1]
+
+            # todo开始 结束位置特殊处理
+
+            # 与上词比对，相同跳过
+            if valid(entity_list, word, label):
+                continue
+
+            # 一直下探，判断下一个label是否相同
+            while i + 1 < len(ner_list) and ner_list[i + 1][1] == label:
+                word += ner_list[i + 1][0]
+                i += 1
+            entity_list.append((word, label))
+
+        else:
+            continue
+    return entity_list
+
+
+def valid(entity_list, word, label):
+    for ele in entity_list:
+        if word in ele[0] and label == ele[1]:
+            return True
+    return False
+
+
+@app.route('/api/chapter_scene/graph', methods=['POST'])
+@allow_cross_domain
+def chapter_scene_graph():
+    """
+    章节、场次图谱更新策略
+    """
+    if not request.json or 'title' not in request.json or 'eid' not in request.json:
+        abort(400)
+    try:
+        eid = request.get_json().get('eid')
+        title = request.get_json().get('title')
+        content = request.get_json().get('content')
+        nlp = StanfordCoreNLP(CORE_NLP, lang='zh', port=9000, quiet=False, logging_level=logging.ERROR, timeout=150000)
+
+        entity_list = []
+        deal_sentence(entity_list, event_label, except_label, except_list, nlp, content)
+        persist_neo4j(eid, entity_list, character_graph, label_dict, title)
+
+        return jsonify({'code': 1, 'message': '图谱生成成功'})
+    except Exception as err:
+        print(err)
+        return jsonify({'code': 0, 'message': '图谱生成失败'})
+
+
+@app.route('/api/chapter_scene/show', methods=['POST'])
+@allow_cross_domain
+def chapter_scene_show():
+    """
+    Neo4j图数据库
+    START x=node(*) MATCH (x)-[*0..3]-(y) where x.name='AI' RETURN x,y
+    :return:
+    """
+    if not request.json or 'eid' not in request.json:
+        abort(400)
+    eid = request.get_json().get('eid')
+
+    cypher = "START x=node(*) MATCH (x)<-[r]-(y) where  x.eid=\'" + eid + "\' RETURN y"
+    c = graph.run(cypher).data()
+    if len(c) == 0:
+        return jsonify({"nodes": [], "edges": []})
+
+    event = c[0]['y']['name']
+    x = character_graph.run(
+        "START x=node(*) MATCH (x)-[r]->(y) where x.name=\'" + event + "\'  RETURN * LIMIT 18").data()
+    nodes = []
+    links = []
+    nodes.append(x[0].get('x'))
+    for i in range(len(x)):
+        nodes.append(x[i].get('y'))
+        edge = x[i].get('r')['edge']
+        data = {'source': 0, 'target': (i + 1), 'type': edge, 'eid': x[i].get('y')['eid']}
+        links.append(data)
+    nodes = json.loads(json.dumps(nodes, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
+    return jsonify({"nodes": nodes, "edges": links})
+
+
+def persist_neo4j(eid, entity_list, character_graph, label_dict, title):
+    cypher = "MATCH (a:Event) WHERE a.eid =\'" + eid + "\' RETURN a"
+    count = len(graph.run(cypher).data())
+    if count == 0:
+        pass
+    else:
+        # 先删除
+        cypher = "start n=node(*) match p=(n)-[*0..3]->(b) where n.eid = \'" + eid + "\'  or b.eid = \'" \
+                 + eid + "\'  delete  p "
+        character_graph.run(cypher)
+
+    node = Node("Event", name=title, eid=eid, image="EVENT.PNG")
+    graph.create(node)
+    for element in entity_list:
+        node2 = Node(element[1], name=element[0], eid=eid, image=element[1] + ".PNG")
+        graph.create(node2)
+        node_call_node_2 = Relationship(node, label_dict[element[1]], node2)
+        node_call_node_2['edge'] = label_dict[element[1]]
+        graph.create(node_call_node_2)
 
 
 @app.route('/api/character/query', methods=['POST'])
@@ -1060,7 +1190,7 @@ def graph_search():
     nodes.append(x[0].get('x'))
     for i in range(len(x)):
         nodes.append(x[i].get('y'))
-        edge = "人物" if "任务" == x[i].get('r')['edge'] else x[i].get('r')['edge']
+        edge = x[i].get('r')['edge']
         data = {'source': 0, 'target': (i + 1), 'type': edge, 'eid': x[i].get('y')['eid']}
         links.append(data)
     nodes = json.loads(json.dumps(nodes, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))

@@ -35,6 +35,7 @@ gunicorn = "*"
 pycrypto = "==2.6.1"
 pyexecjs = "*"
 jieba = "*"
+stanfordcorenlp = "*"
 
 [dev-packages]
 
