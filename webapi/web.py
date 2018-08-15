@@ -867,7 +867,7 @@ def chapter_scene_show():
     eid = request.get_json().get('eid')
 
     cypher = "START x=node(*) MATCH (x)<-[r]-(y) where  x.eid=\'" + eid + "\' RETURN y"
-    c = graph.run(cypher).data()
+    c = character_graph.run(cypher).data()
     if len(c) == 0:
         return jsonify({"nodes": [], "edges": []})
 
@@ -888,7 +888,7 @@ def chapter_scene_show():
 
 def persist_neo4j(eid, entity_list, character_graph, label_dict, title):
     cypher = "MATCH (a:Event) WHERE a.eid =\'" + eid + "\' RETURN a"
-    count = len(graph.run(cypher).data())
+    count = len(character_graph.run(cypher).data())
     if count == 0:
         pass
     else:
@@ -898,13 +898,13 @@ def persist_neo4j(eid, entity_list, character_graph, label_dict, title):
         character_graph.run(cypher)
 
     node = Node("Event", name=title, eid=eid, image="EVENT.PNG")
-    graph.create(node)
+    character_graph.create(node)
     for element in entity_list:
         node2 = Node(element[1], name=element[0], eid=eid, image=element[1] + ".PNG")
-        graph.create(node2)
+        character_graph.create(node2)
         node_call_node_2 = Relationship(node, label_dict[element[1]], node2)
         node_call_node_2['edge'] = label_dict[element[1]]
-        graph.create(node_call_node_2)
+        character_graph.create(node_call_node_2)
 
 
 @app.route('/api/character/query', methods=['POST'])
