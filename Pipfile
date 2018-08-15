@@ -36,6 +36,7 @@ pycrypto = "==2.6.1"
 pyexecjs = "*"
 jieba = "*"
 stanfordcorenlp = "*"
+psutil = "*"
 
 [dev-packages]
 
