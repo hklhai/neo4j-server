@@ -304,8 +304,11 @@ def user_modify_password():
     userid = request.get_json().get('userid')
     password = request.get_json().get('password')
     newpassword = request.get_json().get('newpassword')
-    u_phonenumber = db.session.query(User).filter_by(uid=userid).first()
+    # 解密
+    password = decrypt(password)
+    newpassword = decrypt(newpassword)
 
+    u_phonenumber = db.session.query(User).filter_by(uid=userid).first()
     if u_phonenumber is not None and check_password_hash(u_phonenumber.password, password):
         u_phonenumber.password = generate_password_hash(newpassword)
         db.session.merge(u_phonenumber)
@@ -407,6 +410,21 @@ def book_list():
     dic = dict([(key, list(group)) for key, group in group_by_books])
     db.session.close()
     return jsonify({"books": dic, "total": total})
+
+
+@app.route('/api/bookCategory', methods=['POST'])
+@allow_cross_domain
+def book_category():
+    """
+
+    :return:
+    """
+    if not request.json or 'bookid' not in request.json:
+        abort(400)
+    bookid = request.get_json().get('bookid')
+    book = db.session.query(VBook).filter_by(bookid=bookid).first()
+    db.session.close()
+    return jsonify({"category": book.category})
 
 
 @app.route('/api/editBook', methods=['POST'])
@@ -1177,8 +1195,7 @@ def graph_search():
     search_text = request.get_json().get('search_text')
     eid = request.get_json().get('eid')
 
-    cypher = "START x=node(*) MATCH (x)<-[r]-(y) where x.name=\'" + search_text + "\' and  x.eid=\'" \
-             + eid + "\' RETURN y"
+    cypher = "START x=node(*) MATCH (x)<-[r]-(y) where  x.eid=\'" + eid + "\' RETURN y"
     c = graph.run(cypher).data()
     if len(c) == 0:
         return jsonify({"nodes": [], "edges": []})
