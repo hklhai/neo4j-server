@@ -1291,7 +1291,10 @@ def ai():
 
         keywords = jieba.analyse.extract_tags(chapterabstract, topK=5, withWeight=True, allowPOS=('n', 'nr', 'ns'))
         tags = ""
-        for i in range(4):
+
+        keywords_length = 5 if len(keywords) >= 5 else len(keywords)
+
+        for i in range(keywords_length):
             tags += keywords[i][0] + ","
         tag = tags[0:-1]
         return jsonify({'code': 1, 'peoples': list, 'keywords': tag})
