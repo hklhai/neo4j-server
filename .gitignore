@@ -4,3 +4,4 @@ poetry.*
 *.txt
 common/*
 webapi/nohup.out
+common/global_list.py

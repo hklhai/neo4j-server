@@ -645,8 +645,7 @@ def chapter_list():
         query = {'query': {'term': {'bookid': bookid}}, "sort": [{"chapternumber": {"order": "asc"}}],
                  "from": page_index * page_size, "size": page_size, "_source": {
                 "includes": ["chapternumber", "chaptername", "chapterabstract", "edit_date"],
-                "excludes": ["chaptercontent"]
-            }}
+                "excludes": ["chaptercontent"]}}
         query_total = {'query': {'term': {'bookid': bookid}}}
         all_doc = es.search(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query)
         total = es.count(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query_total)
@@ -1530,7 +1529,9 @@ def scene_list():
 
     try:
         query = {'query': {'term': {'episodeid': episodeid}}, "sort": [{"scenenumber": {"order": "asc"}}],
-                 "from": page_index * page_size, "size": page_size}
+                 "from": page_index * page_size, "size": page_size, "_source": {
+                "includes": ["scenenumber", "scenename", "sceneabstract", "edit_date"],
+                "excludes": ["chaptercontent"]}}
         query_total = {'query': {'term': {'episodeid': episodeid}}}
         all_doc = es.search(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query)
         total = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query_total)

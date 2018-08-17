@@ -6,7 +6,7 @@ cd /home/ubuntu1/Project/srwc
 
 git -c core.quotepath=false -c log.showSignature=false pull --progress --no-stat -v --progress origin master
 
-pipenv shell
+#pipenv shell
 
 cd webapi
 
