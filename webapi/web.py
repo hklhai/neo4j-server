@@ -934,7 +934,6 @@ def chapter_scene_graph():
 
 @app.route('/api/chapter_scene/show', methods=['POST'])
 @allow_cross_domain
-@login_require
 def chapter_scene_show():
     """
     Neo4j图数据库
@@ -1243,7 +1242,9 @@ def search_list():
     try:
         # 短语搜索match_phrase https://blog.csdn.net/cc907566076/article/details/78553950
         query = {'query': {'match_phrase': {'search_text': search_text}}, "from": page_index * page_size,
-                 "size": page_size, "highlight": {"fields": {"search_text": {}}}}
+                 "size": page_size, "highlight": {"fields": {"search_text": {}}},
+                 "_source": {"includes": ["eid", "title"], "excludes": ["chaptercontent"]}}
+
         query_total = {'query': {'match_phrase': {'search_text': search_text}}}
 
         all_doc = es.search(index=SEARCH_TEXT_INDEX, doc_type=SEARCH_TEXT_TYPE, body=query)
@@ -1260,7 +1261,6 @@ def search_list():
 
 @app.route('/api/graph_search', methods=['POST'])
 @allow_cross_domain
-@login_require
 def graph_search():
     """
     Neo4j图数据库
@@ -1299,7 +1299,6 @@ def graph_search():
 
 @app.route('/api/char_graph_search', methods=['POST'])
 @allow_cross_domain
-@login_require
 def char_graph_search():
     """
     人物设定查询数据接口
