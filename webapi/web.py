@@ -9,6 +9,7 @@ from functools import wraps
 from itertools import groupby
 from operator import itemgetter
 
+import flask
 import jieba.analyse
 from elasticsearch import Elasticsearch
 from flask import Flask, make_response
@@ -87,6 +88,24 @@ def allow_cross_domain(fun):
     return wrapper_fun
 
 
+def login_require(fun):
+    @wraps(fun)
+    def decorator(*args, **kwargs):
+        token = flask.request.headers.environ['HTTP_AUTHORIZATION']
+        if token is None:
+            abort(401)
+        user = User.verify_auth_token(token)
+        if type(user).__name__ == "str":
+            if user == "valid token, but expired":
+                abort(401)
+            else:
+                abort(401)
+        else:
+            return fun(*args, **kwargs)
+
+    return decorator
+
+
 @login_manger.user_loader
 @allow_cross_domain
 def load_user(user_id):
@@ -106,12 +125,14 @@ def index():
 
 @app.route('/api/work/save', methods=['POST'])
 @allow_cross_domain
+@login_require
 def work_save():
     """
     保存工作区信息，存在userid更新保存，不存爱userid新增保存
     """""
     if not request.json or 'userid' not in request.json or "eid" not in request.json:
         abort(400)
+
     eid = request.get_json().get('eid')
     userid = request.get_json().get('userid')
     dellabel = 0
@@ -149,7 +170,9 @@ def login():
     db.session.close()
 
     if u_phonenumber is not None and check_password_hash(u_phonenumber.password, orgin_password):
-        return jsonify({'code': 1, 'message': '成功登录', 'username': u_phonenumber.username, 'userid': u_phonenumber.uid})
+        token = User.generate_auth_token(u_phonenumber, DURATION)
+        return jsonify({'code': 1, 'message': '成功登录', 'username': u_phonenumber.username,
+                        'userid': u_phonenumber.uid, 'token': token.decode('ascii'), 'duration': DURATION})
     else:
         flash('用户或密码错误')
         return jsonify({'code': 0, 'message': '用户名或密码错误'})
@@ -157,12 +180,14 @@ def login():
 
 @app.route('/api/work/detail', methods=['POST'])
 @allow_cross_domain
+@login_require
 def work_detail():
     """
     查询工作信息
     """
     if not request.json or 'userid' not in request.json:
         abort(400)
+
     userid = request.get_json().get('userid')
     work = db.session.query(Work).filter_by(userid=userid, dellabel=0).first()
     db.session.close()
@@ -241,13 +266,15 @@ def register():
 
 @app.route('/api/user/detail', methods=['POST'])
 @allow_cross_domain
+@login_require
 def user_detail():
     """
     用户信息获取
     """
+    if not request.json or 'userid' not in request.json:
+        abort(400)
+
     try:
-        if not request.json or 'userid' not in request.json:
-            abort(400)
         userid = request.get_json().get('userid')
         user = db.session.query(User).filter_by(uid=userid).first()
         u = json.loads(json.dumps(user, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
@@ -260,12 +287,14 @@ def user_detail():
 
 @app.route('/api/user/edit', methods=['POST'])
 @allow_cross_domain
+@login_require
 def user_edit():
     """
     用户信息修改
     """
     if not request.json or 'uid' not in request.json:
         abort(400)
+
     userid = request.get_json().get('uid')
     username = request.get_json().get('username')
     sex = request.get_json().get('sex')
@@ -302,6 +331,7 @@ def user_modify_password():
     if not request.json or 'userid' not in request.json or "password" not in request.json \
             or "newpassword" not in request.json:
         abort(400)
+
     userid = request.get_json().get('userid')
     password = request.get_json().get('password')
     newpassword = request.get_json().get('newpassword')
@@ -345,6 +375,7 @@ def valid_user_info():
 
 @app.route('/api/addBook', methods=['POST'])
 @allow_cross_domain
+@login_require
 def book_add():
     """
     新建小说
@@ -385,6 +416,7 @@ def book_add():
 
 @app.route('/api/bookList', methods=['POST'])
 @allow_cross_domain
+@login_require
 def book_list():
     """
     获取当前用户图书列表
@@ -392,6 +424,7 @@ def book_list():
     """
     if not request.json or 'userid' not in request.json:
         abort(400)
+
     userid = request.get_json().get('userid')
     page_index = request.get_json().get('page_index')
     page_size = request.get_json().get('page_size')
@@ -415,6 +448,7 @@ def book_list():
 
 @app.route('/api/bookCategory', methods=['POST'])
 @allow_cross_domain
+@login_require
 def book_category():
     """
 
@@ -422,6 +456,7 @@ def book_category():
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     bookid = request.get_json().get('bookid')
     book = db.session.query(VBook).filter_by(bookid=bookid).first()
     db.session.close()
@@ -430,14 +465,16 @@ def book_category():
 
 @app.route('/api/editBook', methods=['POST'])
 @allow_cross_domain
+@login_require
 def book_edit():
     """
     更新图书信息
     :return: 当前用户图书列表
     """
-    if not request.json or 'bookid' not in request.json or 'category' not in request.json or \
-            'label' not in request.json or 'abstract' not in request.json or 'writing' not in request.json:
+    if not request.json or 'bookid' not in request.json or 'category' not in request.json or 'label' not in request.json \
+            or 'abstract' not in request.json or 'writing' not in request.json:
         abort(400)
+
     bookid = request.get_json().get('bookid')
     bookname = request.get_json().get('bookname')
     bookstatus = request.get_json().get('bookstatus')
@@ -467,6 +504,7 @@ def book_edit():
 
 @app.route('/api/deleteBook', methods=['POST'])
 @allow_cross_domain
+@login_require
 def book_logic_delete():
     """
     逻辑删除图书信息
@@ -474,6 +512,7 @@ def book_logic_delete():
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     bookid = request.get_json().get('bookid')
     book = db.session.query(Book).filter_by(bookid=bookid).first()
     if book is not None:
@@ -490,6 +529,7 @@ def book_logic_delete():
 
 @app.route('/api/book/complet/delete', methods=['POST'])
 @allow_cross_domain
+@login_require
 def book_complete_delete():
     """
     完全删除图书信息
@@ -497,6 +537,7 @@ def book_complete_delete():
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     bookid = request.get_json().get('bookid')
     book = db.session.query(Book).filter_by(bookid=bookid).first()
     if book is not None:
@@ -511,6 +552,7 @@ def book_complete_delete():
 
 @app.route('/api/detail', methods=['POST'])
 @allow_cross_domain
+@login_require
 def book_detail():
     """
     获取图书信息
@@ -518,6 +560,7 @@ def book_detail():
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     bookid = request.get_json().get('bookid')
     book = db.session.query(Book).filter_by(bookid=bookid, booklabel=0).first()
     b = json.loads(json.dumps(book, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
@@ -530,6 +573,7 @@ def book_detail():
 
 @app.route('/api/news/detail', methods=['POST'])
 @allow_cross_domain
+@login_require
 def get_detail_by_eid():
     """
     通过eid查询新闻详细信息
@@ -549,6 +593,7 @@ def get_detail_by_eid():
 
 @app.route('/api/chapter/add', methods=['POST'])
 @allow_cross_domain
+@login_require
 def chapter_add():
     """
     持久化章节信息至elasticsearch
@@ -556,6 +601,7 @@ def chapter_add():
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     try:
         chaptername = request.get_json().get('chaptername')
         chapterabstract = request.get_json().get('chapterabstract')
@@ -583,12 +629,14 @@ def chapter_add():
 
 @app.route('/api/chapter/edit', methods=['POST'])
 @allow_cross_domain
+@login_require
 def chapter_edit():
     """
     更新ElasticSearch章节信息
     """
     if not request.json or 'bookid' not in request.json or 'eid' not in request.json:
         abort(400)
+
     try:
         chaptername = request.get_json().get('chaptername')
         chapterabstract = request.get_json().get('chapterabstract')
@@ -627,6 +675,7 @@ def chapter_edit():
 
 @app.route('/api/chapter/list', methods=['POST'])
 @allow_cross_domain
+@login_require
 def chapter_list():
     """
     获取ElasticSearch章节列表信息
@@ -657,6 +706,7 @@ def chapter_list():
 
 @app.route('/api/chapter/delete', methods=['POST'])
 @allow_cross_domain
+@login_require
 def chapter_delete():
     """
     删除ElasticSearch章节信息
@@ -664,6 +714,7 @@ def chapter_delete():
     """
     if not request.json or 'eid' not in request.json:
         abort(400)
+
     try:
         eid = request.get_json().get('eid')
         es.delete(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, id=eid)
@@ -695,6 +746,7 @@ def delete_current_book(eid):
 
 @app.route('/api/chapter/detail', methods=['POST'])
 @allow_cross_domain
+@login_require
 def chapter_detail_by_eid():
     """
     通过eid查询章节详细信息
@@ -710,6 +762,7 @@ def chapter_detail_by_eid():
 
 @app.route('/api/chapter/count', methods=['POST'])
 @allow_cross_domain
+@login_require
 def chapter_count():
     """
     ElasticSearch章节数量
@@ -717,6 +770,7 @@ def chapter_count():
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     try:
         bookid = request.get_json().get('bookid')
         query = {'query': {'term': {'bookid': bookid}}}
@@ -734,6 +788,7 @@ def chapter_count():
 
 @app.route('/api/character/add', methods=['POST'])
 @allow_cross_domain
+@login_require
 def character_add():
     """
     持久化人物设定信息至elasticsearch
@@ -741,6 +796,7 @@ def character_add():
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     try:
         bookid = request.get_json().get('bookid')
         query = {'query': {'term': {'bookid': bookid}}}
@@ -768,6 +824,7 @@ def character_add():
 
 @app.route('/api/character/edit', methods=['POST'])
 @allow_cross_domain
+@login_require
 def character_edit():
     """
     更新ElasticSearch人物设定信息
@@ -775,6 +832,7 @@ def character_edit():
     """
     if not request.json or 'bookid' not in request.json or 'eid' not in request.json:
         abort(400)
+
     try:
         charactersetting = request.get_json().get('charactersetting')
         bookid = request.get_json().get('bookid')
@@ -850,12 +908,14 @@ def valid(entity_list, word, label):
 
 @app.route('/api/chapter_scene/graph', methods=['POST'])
 @allow_cross_domain
+@login_require
 def chapter_scene_graph():
     """
     章节、场次图谱更新策略
     """
     if not request.json or 'title' not in request.json or 'eid' not in request.json:
         abort(400)
+
     try:
         eid = request.get_json().get('eid')
         title = request.get_json().get('title')
@@ -874,6 +934,7 @@ def chapter_scene_graph():
 
 @app.route('/api/chapter_scene/show', methods=['POST'])
 @allow_cross_domain
+@login_require
 def chapter_scene_show():
     """
     Neo4j图数据库
@@ -882,6 +943,7 @@ def chapter_scene_show():
     """
     if not request.json or 'eid' not in request.json:
         abort(400)
+
     eid = request.get_json().get('eid')
 
     cypher = "START x=node(*) MATCH (x)<-[r]-(y) where  x.eid=\'" + eid + "\' RETURN y"
@@ -927,6 +989,7 @@ def persist_neo4j(eid, entity_list, character_graph, label_dict, title):
 
 @app.route('/api/character/query', methods=['POST'])
 @allow_cross_domain
+@login_require
 def character_query():
     """
     通过bookid获取ElasticSearch人物设定信息
@@ -934,6 +997,7 @@ def character_query():
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     try:
         bookid = request.get_json().get('bookid')
         query = {'query': {'term': {'bookid': bookid}}}
@@ -946,6 +1010,7 @@ def character_query():
 
 @app.route('/api/character/delete', methods=['POST'])
 @allow_cross_domain
+@login_require
 def character_delete():
     """
     删除ElasticSearch人物设定信息
@@ -953,6 +1018,7 @@ def character_delete():
     """
     if not request.json or 'eid' not in request.json:
         abort(400)
+
     try:
         eid = request.get_json().get('eid')
         es.delete(index=CHARACTER_INDEX, doc_type=CHARACTER_TYPE, id=eid)
@@ -1038,6 +1104,7 @@ def extract_realtion_persist_to_neo4j(eid, peoples, matcher):
 
 @app.route('/api/info/add', methods=['POST'])
 @allow_cross_domain
+@login_require
 def info_add():
     """
     持久化大纲信息至elasticsearch
@@ -1045,6 +1112,7 @@ def info_add():
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     try:
         bookid = request.get_json().get('bookid')
         query = {'query': {'term': {'bookid': bookid}}}
@@ -1066,6 +1134,7 @@ def info_add():
 
 @app.route('/api/info/edit', methods=['POST'])
 @allow_cross_domain
+@login_require
 def info_edit():
     """
     更新ElasticSearch大纲信息
@@ -1073,6 +1142,7 @@ def info_edit():
     """
     if not request.json or 'bookid' not in request.json or 'eid' not in request.json:
         abort(400)
+
     try:
         bookabstract = request.get_json().get('bookabstract')
         bookid = request.get_json().get('bookid')
@@ -1094,6 +1164,7 @@ def info_edit():
 
 @app.route('/api/info/detail', methods=['POST'])
 @allow_cross_domain
+@login_require
 def get_info_detail_by_eid():
     """
     通过eid查询大纲信息
@@ -1109,6 +1180,7 @@ def get_info_detail_by_eid():
 
 @app.route('/api/info/query', methods=['POST'])
 @allow_cross_domain
+@login_require
 def info_query():
     """
     通过bookid获取ElasticSearch故事大纲信息
@@ -1116,6 +1188,7 @@ def info_query():
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     try:
         bookid = request.get_json().get('bookid')
         query = {'query': {'term': {'bookid': bookid}}}
@@ -1128,6 +1201,7 @@ def info_query():
 
 @app.route('/api/info/delete', methods=['POST'])
 @allow_cross_domain
+@login_require
 def info_delete():
     """
     删除ElasticSearch大纲信息
@@ -1135,6 +1209,7 @@ def info_delete():
     """
     if not request.json or 'eid' not in request.json:
         abort(400)
+
     try:
         eid = request.get_json().get('eid')
         es.delete(index=BOOK_INDEX, doc_type=BOOK_TYPE, id=eid)
@@ -1151,6 +1226,7 @@ def info_delete():
 
 @app.route('/api/search/list', methods=['POST'])
 @allow_cross_domain
+@login_require
 def search_list():
     """
     查询命名体识别信息
@@ -1184,6 +1260,7 @@ def search_list():
 
 @app.route('/api/graph_search', methods=['POST'])
 @allow_cross_domain
+@login_require
 def graph_search():
     """
     Neo4j图数据库
@@ -1192,6 +1269,7 @@ def graph_search():
     """
     if not request.json or 'search_text' not in request.json or 'eid' not in request.json:
         abort(400)
+
     search_text = request.get_json().get('search_text')
     eid = request.get_json().get('eid')
 
@@ -1221,12 +1299,14 @@ def graph_search():
 
 @app.route('/api/char_graph_search', methods=['POST'])
 @allow_cross_domain
+@login_require
 def char_graph_search():
     """
     人物设定查询数据接口
     """
     if not request.json or 'eid' not in request.json:
         abort(400)
+
     eid = request.get_json().get('eid')
     x = character_graph.run(
         "START x=node(*) MATCH (x)-[r]->(y) where y.eid=\'" + eid + "\' or r.eid=\'" + eid + "\'  RETURN * ").data()
@@ -1262,12 +1342,15 @@ def char_graph_search():
 
 @app.route('/api/ai', methods=['POST'])
 @allow_cross_domain
+@login_require
 def ai():
     """
     根据章节信息返回主题；人物，性格
     """
-    if not request.json or 'chapterabstract' not in request.json or 'bookid' not in request.json:
+    if not request.json or 'chapterabstract' not in request.json or 'bookid' not in request.json or \
+            'token' not in request.json:
         abort(400)
+
     chapterabstract = request.get_json().get('chapterabstract')
     bookid = request.get_json().get('bookid')
     # 查询人物设定，解析并返回
@@ -1307,6 +1390,7 @@ def ai():
 
 @app.route('/api/episode/count', methods=['POST'])
 @allow_cross_domain
+@login_require
 def episode_count():
     """
     获取电视剧剧本集数量
@@ -1314,6 +1398,7 @@ def episode_count():
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     try:
         bookid = request.get_json().get('bookid')
         count = db.session.query(Episode).filter_by(bookid=bookid).count()
@@ -1325,12 +1410,14 @@ def episode_count():
 
 @app.route('/api/episode/add', methods=['POST'])
 @allow_cross_domain
+@login_require
 def episode_add():
     """
     持久化电视剧集数至MySQL
     """
     if not request.json or 'bookid' not in request.json:
         abort(400)
+
     try:
         episodename = request.get_json().get('episodename')
         episodenumber = request.get_json().get('episodenumber')
@@ -1353,6 +1440,7 @@ def episode_add():
 
 @app.route('/api/episode/list', methods=['POST'])
 @allow_cross_domain
+@login_require
 def episode_list():
     """
     获取MySQL剧集列表信息
@@ -1376,6 +1464,7 @@ def episode_list():
 
 @app.route('/api/episode/edit', methods=['POST'])
 @allow_cross_domain
+@login_require
 def episode_edit():
     """
     更新MySQL中剧集信息
@@ -1404,6 +1493,7 @@ def episode_edit():
 
 @app.route('/api/episode/delete', methods=['POST'])
 @allow_cross_domain
+@login_require
 def episode_delete():
     """
     删除MySQL剧集信息
@@ -1411,6 +1501,7 @@ def episode_delete():
     """
     if not request.json or 'episodeid' not in request.json:
         abort(400)
+
     episodeid = request.get_json().get('episodeid')
     episode = db.session.query(Episode).filter_by(episodeid=episodeid).first()
     if episode is not None:
@@ -1425,12 +1516,14 @@ def episode_delete():
 
 @app.route('/api/episode/detail', methods=['POST'])
 @allow_cross_domain
+@login_require
 def get_episode_detail_by_episodeid():
     """
     通过episodeid查询剧集详细信息
     """
     if not request.json or 'episodeid' not in request.json:
         abort(400)
+
     episodeid = request.get_json().get('episodeid')
     episode = db.session.query(Episode).filter_by(episodeid=episodeid).first()
     b = json.loads(json.dumps(episode, cls=new_alchemy_encoder(), check_circular=False, ensure_ascii=False))
@@ -1445,13 +1538,16 @@ def get_episode_detail_by_episodeid():
 
 @app.route('/api/scene/count', methods=['POST'])
 @allow_cross_domain
+@login_require
 def scene_count():
     """
     ElasticSearch电视场数量
     :return: ElasticSearch电视场数量+1 , 返回当前集
     """
-    if not request.json or 'episodeid' not in request.json or 'bookid' not in request.json:
+    if not request.json or 'episodeid' not in request.json or 'bookid' not in request.json or \
+            'token' not in request.json:
         abort(400)
+
     try:
         episodeid = request.get_json().get('episodeid')
         bookid = request.get_json().get('bookid')
@@ -1480,6 +1576,7 @@ def scene_count():
 
 @app.route('/api/scene/add', methods=['POST'])
 @allow_cross_domain
+@login_require
 def scene_add():
     """
     持久化电视剧场次信息至elasticsearch
@@ -1515,6 +1612,7 @@ def scene_add():
 
 @app.route('/api/scene/list', methods=['POST'])
 @allow_cross_domain
+@login_require
 def scene_list():
     """
     获取ElasticSearch电视剧场次列表信息
@@ -1546,12 +1644,14 @@ def scene_list():
 
 @app.route('/api/scene/edit', methods=['POST'])
 @allow_cross_domain
+@login_require
 def scene_edit():
     """
     更新ElasticSearch场次信息
     """
     if not request.json or 'eid' not in request.json:
         abort(400)
+
     try:
         scenename = request.get_json().get('scenename')
         scenecontent = request.get_json().get('scenecontent')
@@ -1617,6 +1717,7 @@ def persist_current_eid(bookid, eid, currentedit, episodenumber, scenenumber):
 
 @app.route('/api/scene/delete', methods=['POST'])
 @allow_cross_domain
+@login_require
 def scene_delete():
     """
     删除ElasticSearch电视剧场次信息
@@ -1624,6 +1725,7 @@ def scene_delete():
     """
     if not request.json or 'eid' not in request.json:
         abort(400)
+
     try:
         eid = request.get_json().get('eid')
         es.delete(index=SCENE_INDEX, doc_type=SCENE_TYPE, id=eid)
@@ -1637,6 +1739,7 @@ def scene_delete():
 
 @app.route('/api/scene/deatil', methods=['POST'])
 @allow_cross_domain
+@login_require
 def scene_deatil():
     """
     获取ElasticSearch电视剧场次信息
@@ -1674,6 +1777,7 @@ def persist_user_search(word, userid, app, total):
 
 @app.route('/api/comment/title', methods=['POST'])
 @allow_cross_domain
+@login_require
 def comment_title():
     """
     根据title查询
@@ -1697,6 +1801,7 @@ def comment_title():
 
 @app.route('/api/comment/search', methods=['POST'])
 @allow_cross_domain
+@login_require
 def comment_search():
     """
     评论关键字查询

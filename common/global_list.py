@@ -70,11 +70,17 @@ key = 'keyskeyskeyskeys'
 iv = '1234567890123456'
 PADDING = '\0'
 
+# 前后端token验证
+SECRET_KEY = 'aym is a lazy dogoljpJdw=='
+# token保存10分钟
+# DURATION = 600
+# token保存15分钟
+# DURATION = 60
+DURATION = 900
+
 
 def encrypt(source):
-    # str = 'y+BjjfXVZJ2f+ZYoljpJdw=='
     pad_it = lambda s: s + (16 - len(s) % 16) * PADDING
-    # source = 'admin'
     generator = AES.new(key, AES.MODE_CBC, iv)
     crypt = generator.encrypt(pad_it(source))
     crypted_string = base64.b64encode(crypt)

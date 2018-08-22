@@ -4,9 +4,11 @@ import json
 from datetime import datetime
 
 from flask_login import UserMixin
+from itsdangerous import TimedJSONWebSignatureSerializer as Serializer, SignatureExpired, BadSignature
 from sqlalchemy.ext.declarative import DeclarativeMeta
 
 from app.run import db
+from common.global_list import SECRET_KEY
 
 
 class User(UserMixin, db.Model):
@@ -43,6 +45,24 @@ class User(UserMixin, db.Model):
 
     def is_anonymous(self):
         return False
+
+    def generate_auth_token(self, expiration=600):
+        s = Serializer(SECRET_KEY, expires_in=expiration)
+        return s.dumps({'id': self.uid})
+
+    @staticmethod
+    def verify_auth_token(token):
+        s = Serializer(SECRET_KEY)
+        try:
+            data = s.loads(token)
+        except SignatureExpired:
+            return "valid token, but expired"  # valid token, but expired
+        except BadSignature:
+            return "invalid token"  # invalid token
+        # user = User.query.get(data['id'])
+        user = db.session.query(User).get(data['id'])
+        db.session.close()
+        return user
 
 
 class Book(db.Model):
