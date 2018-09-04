@@ -1542,7 +1542,7 @@ def scene_count():
     ElasticSearch电视场数量
     :return: ElasticSearch电视场数量+1 , 返回当前集
     """
-    if not request.json or 'episodeid' not in request.json or 'bookid' not in request.json              :
+    if not request.json or 'episodeid' not in request.json or 'bookid' not in request.json:
         abort(400)
 
     try:
