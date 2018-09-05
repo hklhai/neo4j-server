@@ -1814,7 +1814,8 @@ def comment_search():
     try:
         query = {'query': {'match_phrase': {'content': word}}, "from": page_index * page_size, "size": page_size,
                  "highlight": {
-                     "fields": {"content": {"fragment_size": 300, "number_of_fragments": 5, "no_match_size": 300}}}}
+                     "fields": {"content": {"fragment_size": 300, "number_of_fragments": 5, "no_match_size": 300}}},
+                 "sort": [{"create_date": {"order": "desc"}}]}
         query_total = {'query': {'match_phrase': {'content': word}}}
         all_doc = es.search(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query)
         total = es.count(index=COMMENT_INDEX, doc_type=COMMENT_TYPE, body=query_total)
