@@ -76,7 +76,7 @@ SECRET_KEY = 'aym is a lazy dogoljpJdw=='
 # DURATION = 600
 # token保存15分钟
 # DURATION = 60
-DURATION = 900
+DURATION = 1800
 
 
 def encrypt(source):
