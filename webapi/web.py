@@ -650,6 +650,12 @@ def chapter_edit():
         chapternumber = request.get_json().get('chapternumber')
         bookname = request.get_json().get('bookname')
 
+        # 先判断eid是否存在，是否被删除
+        query_total = {'query': {'term': {'_id': eid}}}
+        total = es.count(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, body=query_total)
+        if total['count'] == 0:
+            return jsonify({'code': 0, 'message': '该章节已经删除！'})
+
         persist_current_eid(bookid, eid, chaptername, 0, chapternumber)
 
         # 作品完稿不进入编辑页面
@@ -720,11 +726,25 @@ def chapter_delete():
         es.delete(index=CHAPTER_INDEX, doc_type=CHAPTER_TYPE, id=eid)
         # 需要判断最新章节是不是正在删除的章节，如果是，将最新编辑章节设置为空
         delete_current_book(eid)
+        # 判断work工作台表中是否存在eid，存在删除该记录
+        delete_current_work(eid)
 
         return jsonify({'code': 1, 'message': '删除章节成功'})
     except Exception as err:
         print(err)
         return jsonify({'code': 0, 'message': '删除章节失败'})
+
+
+def delete_current_work(eid):
+    """
+    删除当前工作台保存信息
+    :param eid: 章节或场次eid
+    """
+    work = db.session.query(Work).filter_by(eid=eid).first()
+    if work is not None:
+        db.session.delete(work)
+        db.session.commit()
+        db.session.close()
 
 
 def delete_current_book(eid):
@@ -1665,6 +1685,12 @@ def scene_edit():
         # 由episode_list获取
         episodeid = request.get_json().get('episodeid')
 
+        # 先判断eid是否存在，是否被删除
+        query_total = {'query': {'term': {'_id': eid}}}
+        total = es.count(index=SCENE_INDEX, doc_type=SCENE_TYPE, body=query_total)
+        if total['count'] == 0:
+            return jsonify({'code': 0, 'message': '该场已经删除！'})
+
         # 根据episodeid查剧集号
         episode = db.session.query(Episode).filter_by(episodeid=episodeid).first()
 
@@ -1728,6 +1754,8 @@ def scene_delete():
         es.delete(index=SCENE_INDEX, doc_type=SCENE_TYPE, id=eid)
         # 需要判断最新章节是不是正在删除的章节，如果是，将最新编辑章节设置为空
         delete_current_book(eid)
+        # 判断work工作台表中是否存在eid，存在删除该记录
+        delete_current_work(eid)
         return jsonify({'code': 1, 'message': '删除成功'})
     except Exception as err:
         print(err)
