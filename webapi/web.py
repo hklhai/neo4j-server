@@ -306,7 +306,7 @@ def user_edit():
 
     # 查询用户名是否重名
     user_idcard = db.session.query(User).filter_by(idcard=idcard).first()
-    if user.idcard != user_idcard.idcard:
+    if user_idcard is not None and user.idcard != user_idcard.idcard:
         return jsonify({'code': 0, 'message': '该身份证号已存在，请确认后新建！'})
 
     user.username = username
