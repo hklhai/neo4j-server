@@ -510,10 +510,11 @@ def book_logic_delete():
     逻辑删除图书信息
     :return:
     """
-    if not request.json or 'bookid' not in request.json:
+    if not request.json or 'bookid' not in request.json or 'userid' not in request.json:
         abort(400)
 
     bookid = request.get_json().get('bookid')
+    userid = request.get_json().get('userid')
     book = db.session.query(Book).filter_by(bookid=bookid).first()
     if book is not None:
         book.booklabel = 1
@@ -521,10 +522,28 @@ def book_logic_delete():
         db.session.flush()
         db.session.commit()
         db.session.close()
+
+        # 判断work工作台表中是否存在userid，存在删除该记录
+        work = db.session.query(Work).filter_by(userid=userid).first()
+        if work is not None:
+            delete_current_work_by_userid(userid)
+
         return jsonify({'code': 1, 'message': '删除小说成功'})
     else:
         db.session.close()
         return jsonify({'code': 0, 'message': '删除小说失败'})
+
+
+def delete_current_work_by_userid(userid):
+    """
+    删除当前工作台保存信息
+    :param userid: 用户userid
+    """
+    work = db.session.query(Work).filter_by(userid=userid).first()
+    if work is not None:
+        db.session.delete(work)
+        db.session.commit()
+        db.session.close()
 
 
 @app.route('/api/book/complet/delete', methods=['POST'])
@@ -939,6 +958,7 @@ def chapter_scene_graph():
     try:
         eid = request.get_json().get('eid')
         title = request.get_json().get('title')
+        # todo content实际为故事大纲
         content = request.get_json().get('content')
         nlp = StanfordCoreNLP(CORE_NLP, lang='zh', port=9000, quiet=False, logging_level=logging.ERROR, timeout=150000)
 

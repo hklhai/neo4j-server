@@ -5,3 +5,4 @@ poetry.*
 common/*
 webapi/nohup.out
 common/global_list.py
+*/__pycache__/
