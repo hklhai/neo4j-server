@@ -30,7 +30,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 sys.path.append(os.path.dirname(os.getcwd()))
 
 from common.global_list import *
-from webapi.webapimodels import new_alchemy_encoder, Work, Book, User, VBook, Episode
 
 app = Flask(__name__)
 auth = HTTPTokenAuth(scheme='Bearer')

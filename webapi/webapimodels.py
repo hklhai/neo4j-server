@@ -7,7 +7,7 @@ from flask_login import UserMixin
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer, SignatureExpired, BadSignature
 from sqlalchemy.ext.declarative import DeclarativeMeta
 
-from app.run import db
+from webapi.web import db
 from common.global_list import SECRET_KEY
 
 
